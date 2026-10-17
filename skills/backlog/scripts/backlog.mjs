@@ -980,7 +980,7 @@ function collectChecks(ctx) {
     for (const f of fs.readdirSync(ctx.progressDir).filter((f) => f.endsWith('.md')).sort()) {
       const id = f.slice(0, -3);
       const issue = store.byId.get(id);
-      if (!issue || !['in-progress', 'blocked'].includes(issue.fm.status)) {
+      if (!issue || !['in-progress', 'blocked', 'review'].includes(issue.fm.status)) {
         errors.push(`${ctx.rel(path.join(ctx.progressDir, f))}: orphan progress file (${issue ? `${id} is ${issue.fm.status}` : `${id} does not exist`})`);
       }
     }
