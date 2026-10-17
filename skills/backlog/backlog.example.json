@@ -1,0 +1,11 @@
+{
+  "dir": "backlog",
+  "prefix": "ISS",
+  "statuses": ["backlog", "todo", "in-progress", "blocked", "review", "done", "cancelled"],
+  "priorities": ["P0", "P1", "P2", "P3"],
+  "kinds": ["epic", "feature", "bug", "chore", "spike", "decision"],
+  "areas": [],
+  "progressDir": "progress",
+  "staleDays": 7,
+  "verify": "pnpm verify"
+}
