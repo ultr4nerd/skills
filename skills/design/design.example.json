@@ -1,0 +1,10 @@
+{
+  "dir": "design",
+  "tokens": "design/tokens.json",
+  "themes": {},
+  "themeSelector": "[data-theme=\"{name}\"]",
+  "outputs": { "css": "design/tokens.css", "ts": "design/tokens.ts", "json": null, "md": "design/TOKENS.md" },
+  "css": { "prefix": "", "tailwind": false, "tailwindReset": ["color"] },
+  "budgets": { "design": 150, "component": 80, "tokens": 300 },
+  "scan": { "include": [], "exclude": [], "allow": [], "sizes": false, "severity": "error" }
+}

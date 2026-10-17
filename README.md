@@ -8,6 +8,7 @@ The common idea: **everything about a project lives in files inside the repo**, 
 |---|---|---|
 | [`docmap`](skills/docmap/) | Recursive, indexed documentation. Every folder gets a generated `INDEX.md` (what is here, when to read it); the CLI searches, outlines and extracts single sections so an agent never reads a whole doc blind. Templates for decisions and learnings. | Reading, searching or adding project docs; recording a decision or a learning |
 | [`backlog`](skills/backlog/) | File-based issue tracker for agents ("Linear in a folder"). Markdown issues with priority, status, dependencies and a log; a CLI with `next --claim`, `start`, `log`, `block`, `done`, `board`, `check`. Built for long autonomous loops. | Planning work, "what's next", creating/closing issues, status reports, autonomous runs |
+| [`design`](skills/design/) | Design system in files. W3C DTCG tokens are the single source; `build` generates CSS (optionally a Tailwind v4 `@theme`), a typed TS export and a one-line-per-token `TOKENS.md`; a 150-line `DESIGN.md` is the agent entry point, with component specs, surface targets (wallet pass, email, print, OG) and reference intake notes. `check` covers references, WCAG contrast per theme, stale outputs and hard-coded values in source. | Building or changing UI, email, print, passes or OG images; turning a brand book, screenshots or CSS into tokens; adding colors, fonts or components |
 
 ## Install
 
@@ -16,7 +17,7 @@ Into a project (any agent that reads `.claude/skills/` or `.agents/skills/`):
 ```sh
 npx skills add ultr4nerd/skills            # interactive picker
 # or copy the folders by hand
-cp -R skills/docmap skills/backlog <project>/.claude/skills/
+cp -R skills/docmap skills/backlog skills/design <project>/.claude/skills/
 ln -s ../.claude/skills <project>/.agents/skills
 ```
 
@@ -26,7 +27,8 @@ Wire the CLIs so humans and agents call them the same way (`package.json` shown;
 {
   "scripts": {
     "docs": "node .claude/skills/docmap/scripts/docmap.mjs",
-    "backlog": "node .claude/skills/backlog/scripts/backlog.mjs"
+    "backlog": "node .claude/skills/backlog/scripts/backlog.mjs",
+    "design": "node .claude/skills/design/scripts/design.mjs"
   }
 }
 ```
@@ -38,7 +40,8 @@ Requirements: Node ≥ 20. No npm dependencies.
 1. `AGENTS.md` at the repo root is the single entry point (`CLAUDE.md` just says "read AGENTS.md"). It has a map table (path → what → read when), hard rules, and the work loop.
 2. `docs/` is indexed by `docmap`; `docs/decisions/` and `docs/learnings/` are numbered. A rule is a decision file, never a comment.
 3. `backlog/` is driven by `backlog`; `progress/<id>.md` holds the live plan of in-flight work so another agent can resume.
-4. A `verify` script defines "done": it runs `docmap check`, `backlog check`, the tests, and any project-specific lint. Green before starting, green before closing.
+4. `design/` is driven by `design`: `DESIGN.md` is the entry point for any UI work, `tokens.json` is the only place a color or size is defined, and everything else is generated from it.
+5. A `verify` script defines "done": it runs `docmap check`, `backlog check`, `design check`, the tests, and any project-specific lint. Green before starting, green before closing.
 
 See each skill's `README.md` for details and `SKILL.md` for the agent protocol.
 
