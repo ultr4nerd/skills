@@ -817,7 +817,7 @@ function parseLineRange(spec, doc) {
 }
 
 define('section', {
-  summary: 'print one section of a doc (by heading text or slug, or a line range)',
+  summary: 'print one section of a doc (by heading text or slug, or --lines A-B)',
   usage:
     'docmap section <file> <heading> [--with-children|--no-children]\n' +
     'docmap section <file> --lines 40-80\n\n' +

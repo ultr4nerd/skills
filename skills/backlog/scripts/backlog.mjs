@@ -974,6 +974,10 @@ function collectChecks(ctx) {
     }
     if (isOverdue(issue)) warn(issue, `overdue (due ${fm.due})`);
     if (fm.status === 'todo' && fm.kind !== 'epic' && all.length === 0) warn(issue, 'todo with no acceptance criteria');
+    if (['todo', 'in-progress'].includes(fm.status) && fm.parent) {
+      const parent = store.byId.get(fm.parent);
+      if (parent && parent.fm.status === 'backlog') warn(issue, `is ${fm.status} but parent ${fm.parent} is still backlog`);
+    }
   }
   if (indexIsStale(ctx, store)) errors.push(`${ctx.rel(ctx.indexFile)}: stale or missing; run "backlog index"`);
   if (fs.existsSync(ctx.progressDir)) {

@@ -178,7 +178,7 @@ duplicate ids, unknown `depends_on` or `parent`, dependency or parent cycles, in
 status/priority/kind/area/estimate/date, in-progress without owner, done with an empty Outcome,
 stale or missing INDEX, orphan `progress/*.md` whose issue is not in progress or blocked.
 
-Warnings (exit 0): done with unchecked criteria, in-progress not updated for more than `staleDays`,
+Warnings (exit 0): done with unchecked criteria, todo or in-progress whose parent epic is still `backlog`, in-progress not updated for more than `staleDays`,
 overdue issues, todo (non-epic) with no acceptance criteria.
 
 ## The work loop
