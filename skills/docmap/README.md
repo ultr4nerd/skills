@@ -41,14 +41,29 @@ stale or frontmatter is wrong.
 ## Quick start
 
 ```sh
-mkdir -p docs/decisions docs/learnings
-cp .claude/skills/docmap/docmap.example.json docmap.json      # optional, defaults are the same
+docmap init            # docs/, docs/decisions, docs/learnings with routing READMEs, docmap.json, indexes
 docmap new docs/decisions "Use SQLite for local storage" \
   --description "Todos live in SQLite via better-sqlite3, not Postgres" \
   --read-when "Touching persistence or considering another database"
-docmap index
 docmap check
 ```
+
+`init` never overwrites. Edit the three READMEs it created: their `description` and `read_when`
+are the rows of the root `INDEX.md`, the first (and often only) thing an agent reads, so they
+must route ("Before proposing a change to architecture...") rather than describe ("ADRs").
+
+## Decisions and learnings as project memory
+
+A decision records a choice that constrains future work (`## Decision`, `## Why`,
+`## Consequences`); a learning records a surprise worth not repeating (`## What happened`,
+`## Lesson`, `## Apply when`). Both are numbered and immutable: supersede, never rewrite.
+
+Memory only works if it is written at the moment of friction and read at the moment of risk.
+docmap gives the storage and the search; the [backlog](../backlog/) skill, when installed next to
+it, closes the loop programmatically: `backlog next --claim` prints the decisions and learnings
+whose frontmatter matches the issue, `backlog done --learning` / `backlog learn` file one tagged
+with the issue id, and `backlog retro` lists closed issues with friction and no learning yet.
+`docmap check` warns when a decision lacks `## Why` or a learning lacks `## Apply when`.
 
 ## Config
 
@@ -82,6 +97,7 @@ with forward slashes.
 
 | command | what it does |
 |---|---|
+| `docmap init [--root <dir>]` | Create `docmap.json` (if missing), `<root>/README.md`, `<root>/decisions/README.md`, `<root>/learnings/README.md` from the README template with routing text, then index. Never overwrites; prints `created`/`exists` per file. `--root` only applies when there is no `docmap.json` yet. |
 | `docmap index [--check]` | Regenerate every `INDEX.md` under the roots (every directory that holds a doc or a subdirectory with docs). Orphan indexes are removed. `--check` writes nothing and exits 1 listing stale, missing or orphan indexes. |
 | `docmap find <terms...> [--in <dir>] [--tag <t>] [--status <s>] [--limit N] [--json]` | Ranked search. Case- and diacritic-insensitive prefix match on words (`garantia` finds `Garantía`). Weights: title 10, tags 8, description 6, read_when 6, heading 4 (max 3 headings per term), body 1 per hit (max 10 per term), +10 when every term matches. Prints `path:line  score=N  title — snippet`; line is 1 for frontmatter hits. Default limit 15. Exit 1 when nothing matches. |
 | `docmap outline <file>` | Frontmatter title and description, then one line per heading: line number, `#` level, text, and the word count of that section including subsections. |
@@ -89,7 +105,7 @@ with forward slashes.
 | `docmap section <file> --lines 40-80` | Print a line range (1-based, inclusive). |
 | `docmap show <file>` | Frontmatter as `key: value`, line and word counts, then the outline. |
 | `docmap check [--fix]` | Lint; exit 1 on errors. `--fix` regenerates indexes first. Prints `docmap check: OK (N docs, M dirs)` on success. |
-| `docmap new <dir> "<title>" [--template doc\|decision\|learning\|spec] [--tags a,b] [--description "..."] [--read-when "..."]` | Scaffold from a template, fill title, date, id and tags, slugify the filename (ASCII, lowercase, hyphens), reindex, print the path. Never overwrites. Template defaults to `decision`, `learning` or `spec` when the directory path contains `decisions/`, `learnings/` or `specs/`. |
+| `docmap new <dir> "<title>" [--template doc\|decision\|learning\|spec\|readme] [--tags a,b] [--description "..."] [--read-when "..."]` | Scaffold from a template, fill title, date, id and tags, slugify the filename (ASCII, lowercase, hyphens), reindex, print the path. Never overwrites. Template defaults to `decision`, `learning` or `spec` when the directory path contains `decisions/`, `learnings/` or `specs/`. `--template readme` writes `<dir>/README.md` (the directory's row in the parent index) instead of a slugged file. |
 | `docmap stats` | Docs, dirs, total words (with a rough token estimate), words per directory, five largest docs. |
 | `docmap help`, `docmap <cmd> --help` | Usage. Unknown commands exit 2. |
 
@@ -105,7 +121,9 @@ Errors (exit 1):
 - stale, missing or orphan `INDEX.md`
 - files in a numbered dir not named `NNNN-slug.md`; two files sharing a number
 
-Warnings (exit 0): `status: draft` older than 30 days (by `updated`, else mtime); docs over 400 lines.
+Warnings (exit 0): `status: draft` older than 30 days (by `updated`, else mtime); docs over 400 lines;
+a doc under a `decisions/` directory without `## Decision` or `## Why`; a doc under `learnings/`
+without `## Lesson` or `## Apply when` (a learning without a trigger is never recovered).
 
 ## INDEX.md format
 
@@ -166,14 +184,15 @@ to change the skeletons; keep the frontmatter keys.
 
 ## Versioning
 
-The script carries a `VERSION` constant and answers `docmap --version`. The repo is tagged
-with the same version. Upgrading is re-running `npx skills add ultr4nerd/skills` or copying the
-folder again; indexes are regenerated by `docmap index`, so a format change in a new version
-shows up as a single `index` diff. Breaking changes to the frontmatter schema or the index
-format bump the major version.
+The script carries a `VERSION` constant and answers `docmap --version`; it matches the
+`version` in the repo's `package.json`, and the repo's `verify` script fails if they drift.
+Upgrading is re-running `npx skills add ultr4nerd/skills` or copying the folder again; indexes are
+regenerated by `docmap index`, so a format change in a new version shows up as a single `index`
+diff. Breaking changes to the frontmatter schema or the index format bump the major version.
 
 ## Development
 
 ```sh
 node --test skills/docmap/scripts/docmap.test.mjs    # unit and CLI tests on temp fixture trees
+npm run verify                                        # from the repo root: every skill's tests + packaging checks
 ```

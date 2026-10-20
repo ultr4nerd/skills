@@ -269,7 +269,7 @@ describe('done', () => {
     assert.equal(fm('ISS-0002', 'status'), 'in-progress');
     ok(['done', 'ISS-2', '--outcome', 'forced through', '--force']);
     const text = readIssue('ISS-0002');
-    assert.match(text, /ana: done --force with 2 unchecked acceptance criteria\n- 2026-10-17 10:12 ana: done\n/);
+    assert.match(text, /ana: done --force with 2 unchecked acceptance criteria\n- 2026-10-17 10:12 ana: done: .+\n/);
     assert.match(text, /## Outcome\nforced through\n$/);
     assert.equal(fm('ISS-0002', 'status'), 'done');
     assert.equal(fm('ISS-0002', 'owner'), '');
@@ -405,6 +405,89 @@ describe('index and check', () => {
     assert.match(r.out, /warning: .*ISS-0005.*todo with no acceptance criteria/);
     assert.match(r.out, /backlog check: OK \(5 issues, 3 warnings\)/);
     assert.match(ok(['stale'], { now: '2026-10-30T10:00:00' }).out, /ISS-0002 +in-progress +ana +2026-10-17 +13d/);
+  });
+});
+
+describe('docmap bridge', () => {
+  const DOCMAP = path.join(path.dirname(CLI), '..', '..', 'docmap', 'scripts', 'docmap.mjs');
+  const docmap = (...args) => spawnSync(process.execPath, [DOCMAP, ...args], { cwd: root, encoding: 'utf8' });
+  const withDocs = () => {
+    assert.equal(docmap('init').status, 0);
+    assert.equal(docmap('new', 'docs/learnings', 'Session cookies need SameSite=None behind the proxy', '--description', 'Cookies dropped unless SameSite=None', '--read-when', 'Touching session or cookie code', '--tags', 'auth').status, 0);
+    assert.equal(docmap('new', 'docs/decisions', 'Use signed cookies, not server sessions', '--description', 'No session store', '--read-when', 'Adding per-user server state', '--tags', 'auth').status, 0);
+  };
+
+  test('claim, start and show surface related decisions and learnings; silent without docs or when disabled', () => {
+    ok(['new', 'Add session cookie to login', '--area', 'core', '--criteria', 'HttpOnly']);
+    ok(['new', 'Billing invoices chore', '--criteria', 'x']);
+    assert.doesNotMatch(ok(['show', '1', '--brief']).out, /related/, 'no docs tree yet');
+    withDocs();
+    const r = ok(['next', '--owner', 'ana', '--claim']);
+    assert.match(r.out, /related \(read before working[^\n]*\):\n  docs\/learnings\/0001-session-cookies-need-samesite-none-behind-the-proxy\.md  Session cookies need SameSite=None behind the proxy\n  docs\/decisions\/0001-use-signed-cookies-not-server-sessions\.md  Use signed cookies/);
+    assert.ok(r.out.indexOf('related') < r.out.indexOf('progress:'), 'related is printed before the progress/verify lines');
+    assert.doesNotMatch(ok(['show', '2', '--brief']).out, /related/, 'no frontmatter-level match for an unrelated issue');
+    assert.doesNotMatch(ok(['show', '1', '--brief'], { env: { BACKLOG_DOCMAP: '0' } }).out, /related/);
+    ok(['tick', '1', 'all']);
+    ok(['done', '1', '--outcome', 'ok']);
+    const j = JSON.parse(ok(['next', '--owner', 'ana', '--claim', '--json']).out);
+    assert.deepEqual(j.related, [], 'json claim carries a related array');
+  });
+
+  test('learn files a tagged learning or decision and links it in the Log; done/block take --learning/--decision', () => {
+    withDocs();
+    ok(['new', 'Login endpoint', '--area', 'core', '--tags', 'auth', '--criteria', 'x']);
+    const l = ok(['learn', '1', 'Ingress strips Set-Cookie without Secure', '--read-when', 'Setting cookies behind the ingress']);
+    assert.match(l.out, /^docs\/learnings\/0002-ingress-strips-set-cookie-without-secure\.md\nnow write ## What happened, ## Lesson and ## Apply when\n$/);
+    const file = fs.readFileSync(path.join(root, 'docs/learnings/0002-ingress-strips-set-cookie-without-secure.md'), 'utf8');
+    assert.match(file, /^tags: \[iss-0001, core, auth\]$/m);
+    assert.match(file, /^read_when: Setting cookies behind the ingress$/m);
+    assert.match(readIssue('ISS-0001'), /tester: learning: docs\/learnings\/0002-ingress-strips-set-cookie-without-secure\.md\n/);
+
+    ok(['start', '1', '--owner', 'ana']);
+    const b = ok(['block', '1', 'proxy', '--learning', 'Proxy drops cookies']);
+    assert.match(b.out, /blocked: proxy\ndocs\/learnings\/0003-proxy-drops-cookies\.md\nnow write [^\n]*docmap check fails until it is filled\n$/);
+    ok(['unblock', '1']);
+    ok(['tick', '1', 'all']);
+    const d = ok(['done', '1', '--outcome', 'shipped', '--decision', 'Cookies are signed, never server-side']);
+    assert.match(d.out, /docs\/decisions\/0002-cookies-are-signed-never-server-side\.md\nnow write ## Decision, ## Why and ## Consequences/);
+    assert.doesNotMatch(d.out, /hint:/, 'a linked learning silences the friction hint');
+    assert.match(readIssue('ISS-0001'), /ana: decision: docs\/decisions\/0002-/);
+    assert.match(fs.readFileSync(path.join(root, 'docs/decisions/0002-cookies-are-signed-never-server-side.md'), 'utf8'), /^## Why$/m);
+
+    fs.rmSync(path.join(root, 'docs'), { recursive: true });
+    fs.rmSync(path.join(root, 'docmap.json'));
+    fails(['learn', '1', 'nope'], 1, /docmap skill not found/);
+  });
+
+  test('done hints at friction; retro lists closed issues with friction and no learning', () => {
+    withDocs();
+    ok(['new', 'A', '--criteria', 'x']);
+    ok(['new', 'B', '--criteria', 'x']);
+    ok(['new', 'C', '--criteria', 'x']);
+    ok(['start', '1', '--owner', 'ana']);
+    ok(['log', '1', 'reverted the first attempt, retry with the flag']);
+    ok(['tick', '1', 'all']);
+    const d = ok(['done', '1', '--outcome', 'ok']);
+    assert.match(d.out, /hint: Log shows revert, retry; if something non-obvious caused it, record it: backlog learn ISS-0001 "<title>"/);
+    ok(['start', '2', '--owner', 'ana']);
+    ok(['block', '2', 'creds']);
+    ok(['cancel', '2', 'dropped']);
+    ok(['start', '3', '--owner', 'ana']);
+    ok(['tick', '3', 'all']);
+    assert.doesNotMatch(ok(['done', '3', '--outcome', 'smooth']).out, /hint:/);
+
+    const r = ok(['retro']);
+    assert.match(r.out, /^retro: 2 of 3 issues closed in the last 14 days show friction and have no learning yet\n/);
+    assert.match(r.out, /ISS-0001  done       2026-10-17  revert,retry       A/);
+    assert.match(r.out, /ISS-0002  cancelled  2026-10-17  blocked,cancelled  B/);
+    const j = JSON.parse(ok(['retro', '--json']).out);
+    assert.deepEqual(j.map((x) => [x.id, x.signals]), [['ISS-0001', ['revert', 'retry']], ['ISS-0002', ['blocked', 'cancelled']]]);
+
+    ok(['learn', '1', 'Flag X is required', '--read-when', 'Using X']);
+    assert.match(ok(['retro']).out, /^retro: 1 of 3 issues/);
+    assert.match(ok(['retro', '--days', '0'], { now: '2026-11-01T10:00:00' }).out, /nothing to learn from \(0 issues closed in the last 0 days/);
+    fails(['retro', '--days', 'x'], 2);
+    assert.match(ok(['--version']).out, /^backlog 0\.1\.0\n$/);
   });
 });
 

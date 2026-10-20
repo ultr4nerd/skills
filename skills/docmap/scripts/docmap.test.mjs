@@ -25,6 +25,11 @@ function doc(title, extra = {}, body = `# ${title}\n\nBody text.\n`) {
   return fm({ title, description: `About ${title}`, read_when: `When you need ${title}`, ...extra }, body);
 }
 
+// Bodies that satisfy `check`'s section warnings for decisions and learnings.
+const DECISION_BODY = (title) => `# ${title}\n\n## Decision\n\nX.\n\n## Why\n\nY.\n\n## Consequences\n\nZ.\n`;
+const LEARNING_BODY = (title) => `# ${title}\n\n## What happened\n\nX.\n\n## Lesson\n\nY.\n\n## Apply when\n\nZ.\n`;
+const decision = (title, extra = {}) => doc(title, extra, DECISION_BODY(title));
+
 function project(files, config = CONFIG) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docmap-'));
   fs.writeFileSync(path.join(dir, 'docmap.json'), JSON.stringify(config));
@@ -50,8 +55,8 @@ function read(dir, rel) {
 const NESTED = {
   'docs/README.md': fm({ title: 'Project docs', description: '"Root: start here"', read_when: 'Any project context' }),
   'docs/decisions/README.md': fm({ title: 'Decisions', description: 'ADRs', read_when: 'Before changing architecture' }),
-  'docs/decisions/0001-use-sqlite.md': doc('Use SQLite', { id: 'decisions-0001', status: 'current', updated: '2026-09-01', tags: '[storage, infra]' }),
-  'docs/decisions/0002-drop-redux.md': doc('Drop Redux', { id: 'decisions-0002', status: 'superseded', updated: '2026-09-10' }),
+  'docs/decisions/0001-use-sqlite.md': decision('Use SQLite', { id: 'decisions-0001', status: 'current', updated: '2026-09-01', tags: '[storage, infra]' }),
+  'docs/decisions/0002-drop-redux.md': decision('Drop Redux', { id: 'decisions-0002', status: 'superseded', updated: '2026-09-10' }),
   'docs/specs/payments/garantia.md': doc('Garantía de pago', { tags: '[payments, garantía]' }, [
     '# Garantía de pago',
     '',
@@ -174,7 +179,7 @@ test('index is deterministic and --check detects stale indexes', () => {
   assert.equal(read(dir, 'docs/decisions/INDEX.md'), before);
   assert.equal(cli(dir, 'index', '--check').code, 0);
 
-  fs.writeFileSync(path.join(dir, 'docs/decisions/0002-drop-redux.md'), doc('Drop Redux', { description: 'Changed' }));
+  fs.writeFileSync(path.join(dir, 'docs/decisions/0002-drop-redux.md'), decision('Drop Redux', { description: 'Changed' }));
   const check = cli(dir, 'index', '--check');
   assert.equal(check.code, 1);
   assert.match(check.out, /^stale: docs\/decisions\/INDEX\.md$/m);
@@ -309,11 +314,11 @@ test('check reports each kind of error with file and line', () => {
     'docs/nofm.md': '# No frontmatter\n',
     'docs/long.md': doc('Long', { description: 'x'.repeat(161), status: 'bogus', supersedes: 'ghost', id: 'decisions-0001' }),
     'docs/links.md': doc('Links', {}, '# Links\n\nok [a](../docs/nofm.md) [b](https://x.y) [c](#anchor) [d](mailto:a@b.c)\nbad [e](missing.md#sec) `[f](not-checked.md)`\n'),
-    'docs/decisions/0001-dup-number.md': doc('Dup', { id: 'other' }),
-    'docs/decisions/not-numbered.md': doc('Unnumbered'),
+    'docs/decisions/0001-dup-number.md': decision('Dup', { id: 'other' }),
+    'docs/decisions/not-numbered.md': decision('Unnumbered'),
   });
   cli(dir, 'index');
-  fs.writeFileSync(path.join(dir, 'docs/decisions/0002-drop-redux.md'), doc('Drop Redux', { description: 'Changed' }));
+  fs.writeFileSync(path.join(dir, 'docs/decisions/0002-drop-redux.md'), decision('Drop Redux', { description: 'Changed' }));
   const r = cli(dir, 'check');
   assert.equal(r.code, 1);
   const expected = [
@@ -392,6 +397,54 @@ test('new scaffolds numbered decisions and slugified docs, then reindexes', () =
   assert.match(again.err, /refusing to overwrite/);
   assert.equal(cli(dir, 'new', 'src', 'Nope').code, 1);
   assert.equal(cli(dir, 'new', 'docs', 'X', '--template', 'nope').code, 2);
+});
+
+test('check warns about decisions without Why and learnings without Apply when', () => {
+  const dir = project({
+    ...NESTED,
+    'docs/decisions/0003-bare.md': doc('Bare decision', {}, '# Bare decision\n\n## Decision\n\nX.\n'),
+    'docs/learnings/0001-ok.md': doc('Fine', {}, LEARNING_BODY('Fine')),
+    'docs/learnings/0002-bare.md': doc('Bare learning', {}, '# Bare learning\n\n## What happened\n\nX.\n'),
+  });
+  cli(dir, 'index');
+  const r = cli(dir, 'check');
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /warning: docs\/decisions\/0003-bare\.md: missing section\(s\) "## Why"/);
+  assert.match(r.out, /warning: docs\/learnings\/0002-bare\.md: missing section\(s\) "## Lesson", "## Apply when"/);
+  assert.ok(!r.out.includes('0001-ok.md'));
+  assert.match(r.out, /2 warning\(s\)\)$/);
+});
+
+test('new --template readme writes README.md that becomes the directory row', () => {
+  const dir = project(NESTED);
+  cli(dir, 'index');
+  const r = cli(dir, 'new', 'docs/specs', 'Specs', '--template', 'readme', '--description', 'Feature specs', '--read-when', 'Implementing a feature');
+  assert.equal(r.code, 0, r.err);
+  assert.equal(r.out, 'docs/specs/README.md');
+  assert.match(read(dir, 'docs/INDEX.md'), /\| \[specs\/\]\(specs\/INDEX\.md\) \| Feature specs \| Implementing a feature \|/);
+  assert.equal(cli(dir, 'check').code, 0);
+});
+
+test('init scaffolds config, routing READMEs and indexes, and never overwrites', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docmap-init-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  const r = cli(dir, 'init');
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /^created docmap\.json\ncreated docs\/README\.md\ncreated docs\/decisions\/README\.md\ncreated docs\/learnings\/README\.md\nindexed docs\/INDEX\.md/);
+  const index = read(dir, 'docs/INDEX.md');
+  assert.match(index, /\| \[decisions\/\]\(decisions\/INDEX\.md\) \| Choices that constrain/);
+  assert.match(index, /\| \[learnings\/\]\(learnings\/INDEX\.md\) \| Surprises/);
+  assert.equal(cli(dir, 'check').out, 'docmap check: OK (3 docs, 3 dirs)');
+  const again = cli(dir, 'init', '--root', 'other');
+  assert.equal(again.code, 0);
+  assert.match(again.out, /docmap\.json exists; --root ignored/);
+  assert.match(again.out, /exists  docs\/README\.md/);
+  assert.ok(!fs.existsSync(path.join(dir, 'other')));
+
+  const custom = fs.mkdtempSync(path.join(os.tmpdir(), 'docmap-init-'));
+  assert.equal(cli(custom, 'init', '--root', 'documentation').code, 0);
+  assert.deepEqual(JSON.parse(read(custom, 'docmap.json')).numbered, ['documentation/decisions', 'documentation/learnings']);
+  assert.equal(cli(custom, 'check').code, 0);
 });
 
 // ---------------------------------------------------------------------------

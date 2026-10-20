@@ -10,7 +10,10 @@ const VERSION = '0.1.0';
 const CONFIG_FILE = 'docmap.json';
 const STATUSES = ['draft', 'current', 'deprecated', 'superseded'];
 const REQUIRED_KEYS = ['title', 'description', 'read_when'];
-const TEMPLATES = ['doc', 'decision', 'learning', 'spec'];
+const TEMPLATES = ['doc', 'decision', 'learning', 'spec', 'readme'];
+// Sections a decision / learning needs to be useful later. A learning without
+// "Apply when" is never recovered; a decision without "Why" cannot be revisited.
+const REQUIRED_SECTIONS = { decisions: ['Decision', 'Why'], learnings: ['Lesson', 'Apply when'] };
 const NUMBERED_FILE = /^(\d{4})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 const DRAFT_MAX_AGE_DAYS = 30;
 const LONG_DOC_LINES = 400;
@@ -938,6 +941,12 @@ function checkFrontmatter(ctx, doc, report) {
 }
 
 function checkWarnings(doc, report) {
+  const kind = doc.rel.split('/').slice(0, -1).find((seg) => REQUIRED_SECTIONS[seg]);
+  if (kind && doc.name !== 'README.md') {
+    const have = new Set(doc.headings.map((h) => h.slug));
+    const missing = REQUIRED_SECTIONS[kind].filter((s) => !have.has(slugify(s)));
+    if (missing.length) report('warning', doc.rel, null, `missing section(s) ${missing.map((s) => `"## ${s}"`).join(', ')}; without them this ${kind.slice(0, -1)} is hard to apply later`);
+  }
   if (doc.lines.length > LONG_DOC_LINES) {
     report('warning', doc.rel, null, `${doc.lines.length} lines; consider splitting so agents can read sections`);
   }
@@ -1074,9 +1083,10 @@ function fillTemplate(text, values) {
 define('new', {
   summary: 'scaffold a doc from a template, then reindex',
   usage:
-    'docmap new <dir> "<title>" [--template doc|decision|learning|spec] [--tags a,b] [--description "..."] [--read-when "..."]\n\n' +
+    'docmap new <dir> "<title>" [--template doc|decision|learning|spec|readme] [--tags a,b] [--description "..."] [--read-when "..."]\n\n' +
     '  Template defaults to decision/learning/spec when <dir> contains decisions/, learnings/ or specs/, else doc.\n' +
-    '  In numbered dirs the file is NNNN-<slug>.md with the next free number.',
+    '  In numbered dirs the file is NNNN-<slug>.md with the next free number.\n' +
+    '  --template readme writes <dir>/README.md: its description/read_when become the directory row in the parent index.',
   flags: { template: 'string', tags: 'string', description: 'string', 'read-when': 'string' },
   run(ctx, { opts, positional }, io) {
     const [dirArg, title] = positional;
@@ -1091,13 +1101,13 @@ define('new', {
     }
     const template = opts.template || defaultTemplate(dirRel);
     if (!TEMPLATES.includes(template)) throw new UserError(`new: unknown template "${template}", expected one of: ${TEMPLATES.join(', ')}`, 2);
-    const templateFile = path.join(templatesDir(ctx), `${template}.md`);
+    const templateFile = path.join(templatesDir(ctx), `${template === 'readme' ? 'README' : template}.md`);
     if (!fs.existsSync(templateFile)) throw new UserError(`new: template file not found: ${toPosix(templateFile)}`);
 
     fs.mkdirSync(dirAbs, { recursive: true });
-    const numbered = isNumberedDir(ctx, dirRel);
+    const numbered = template !== 'readme' && isNumberedDir(ctx, dirRel);
     const number = numbered ? nextNumber(dirAbs) : null;
-    const fileName = numbered ? `${number}-${slug}.md` : `${slug}.md`;
+    const fileName = template === 'readme' ? 'README.md' : numbered ? `${number}-${slug}.md` : `${slug}.md`;
     const fileAbs = path.join(dirAbs, fileName);
     if (fs.existsSync(fileAbs)) throw new UserError(`new: refusing to overwrite existing file: ${relToRoot(ctx, fileAbs)}`);
 
@@ -1118,6 +1128,72 @@ define('new', {
     applyIndexChanges(computeIndexChanges(ctx, tree));
     io.out(relToRoot(ctx, fileAbs));
     if (!values.description || !values.read_when) io.out('fill in description and read_when, then run "docmap index"');
+    return 0;
+  },
+});
+
+// ---- init -----------------------------------------------------------------
+
+// Directory READMEs created by `init`. Their description/read_when become the rows of the
+// root INDEX, which is the first thing an agent reads, so they must route, not describe.
+const INIT_READMES = {
+  root: {
+    title: 'Project docs',
+    description: 'Entry point to every project document; descend only where "read when" matches your task',
+    read_when: 'Starting any task that touches design, rules or history of this project',
+  },
+  decisions: {
+    title: 'Decisions',
+    description: 'Choices that constrain future work, numbered, with the why and the alternatives rejected',
+    read_when: 'Before proposing a change to architecture, tooling or process; a current decision may already forbid or require it',
+  },
+  learnings: {
+    title: 'Learnings',
+    description: 'Surprises, failures and retries turned into rules, numbered, each with a trigger ("Apply when")',
+    read_when: 'Before starting work in an area where something went wrong before; after any blocked, reverted or retried task',
+  },
+};
+
+define('init', {
+  summary: 'scaffold docs/, decisions/ and learnings/ with routing READMEs, config and indexes',
+  usage:
+    'docmap init [--root <dir>]\n\n' +
+    '  Creates (never overwrites): docmap.json, <root>/README.md, <root>/decisions/README.md,\n' +
+    '  <root>/learnings/README.md, then runs index. --root defaults to "docs" (ignored when docmap.json exists).',
+  flags: { root: 'string' },
+  run(ctx, { opts }, io) {
+    const configFile = path.join(ctx.root, CONFIG_FILE);
+    let config = ctx.config;
+    if (!fs.existsSync(configFile)) {
+      const root = (opts.root || 'docs').replace(/\/+$/, '');
+      config = { ...DEFAULT_CONFIG, roots: [root], numbered: [`${root}/decisions`, `${root}/learnings`] };
+      fs.writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
+      io.out(`created ${CONFIG_FILE}`);
+      ctx = createContext(ctx.cwd);
+    } else if (opts.root) {
+      io.out(`${CONFIG_FILE} exists; --root ignored, using roots: ${config.roots.join(', ')}`);
+    }
+    const template = fs.readFileSync(path.join(templatesDir(ctx), 'README.md'), 'utf8');
+    const ensureReadme = (relDir, values) => {
+      const abs = path.join(ctx.root, relDir);
+      fs.mkdirSync(abs, { recursive: true });
+      const file = path.join(abs, 'README.md');
+      if (fs.existsSync(file)) { io.out(`exists  ${toPosix(relDir)}/README.md`); return; }
+      fs.writeFileSync(file, fillTemplate(template, values));
+      io.out(`created ${toPosix(relDir)}/README.md`);
+    };
+    for (const root of ctx.config.roots) {
+      ensureReadme(root, INIT_READMES.root);
+      for (const sub of ['decisions', 'learnings']) {
+        const rel = `${root}/${sub}`;
+        if (!ctx.numbered.has(rel)) continue;
+        ensureReadme(rel, INIT_READMES[sub]);
+      }
+    }
+    const changes = computeIndexChanges(ctx, scanTree(ctx));
+    applyIndexChanges(changes);
+    for (const c of changes) io.out(`indexed ${c.rel}`);
+    io.out(`next: edit the READMEs so "read when" routes agents correctly, then "docmap new ${ctx.config.roots[0]}/decisions \"<title>\" ..."`);
     return 0;
   },
 });

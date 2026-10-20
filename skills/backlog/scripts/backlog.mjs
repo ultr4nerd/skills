@@ -2,6 +2,7 @@
 // backlog - file-based issue tracker for agents and humans.
 // Node >= 20, ESM, zero dependencies, synchronous fs, no network.
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const VERSION = '0.1.0';
 
 const DEFAULT_CONFIG = {
   dir: 'backlog',
@@ -542,6 +544,7 @@ function brief(ctx, store, issue) {
     out.push('Log (last 3):');
     out.push(...logs.map((l) => `  ${l}`));
   }
+  if (isOpen(issue)) out.push(...relatedLines(relatedDocs(ctx, issue)));
   return out.join('\n');
 }
 
@@ -607,6 +610,116 @@ function writeIndex(ctx, store) {
 function indexIsStale(ctx, store) {
   if (!fs.existsSync(ctx.indexFile)) return true;
   return fs.readFileSync(ctx.indexFile, 'utf8').replace(/\r\n/g, '\n') !== renderIndex(ctx, store);
+}
+
+
+// ---------------------------------------------------------------------------
+// docmap bridge (optional, zero-cost when absent)
+//
+// Learnings only pay off if they resurface at the moment the same mistake is about to be
+// made, and they only get written if a command asks for them at the moment the friction is
+// still fresh. So, when the docmap skill is installed next to this one and the project has a
+// docs tree: `next --claim`/`start`/`show` print the decisions and learnings that match the
+// issue, `learn` files a new one tagged with the issue id, and `done`/`block` take
+// --learning / --decision. Without docmap every one of these is a silent no-op.
+
+function findDocmap(ctx) {
+  if (process.env.BACKLOG_DOCMAP === '0') return null;
+  const candidates = [
+    process.env.BACKLOG_DOCMAP,
+    path.join(SKILL_DIR, '..', 'docmap', 'scripts', 'docmap.mjs'),
+    path.join(ctx.root, '.claude', 'skills', 'docmap', 'scripts', 'docmap.mjs'),
+    path.join(ctx.root, '.agents', 'skills', 'docmap', 'scripts', 'docmap.mjs'),
+  ].filter(Boolean);
+  const script = candidates.find((f) => fs.existsSync(f));
+  if (!script) return null;
+  const hasDocs = fs.existsSync(path.join(ctx.root, 'docmap.json')) || fs.existsSync(path.join(ctx.root, 'docs'));
+  return hasDocs ? script : null;
+}
+
+function runDocmap(ctx, script, args) {
+  const res = spawnSync(process.execPath, [script, ...args], { cwd: ctx.root, encoding: 'utf8' });
+  return { code: res.status, out: (res.stdout ?? '').trim(), err: (res.stderr ?? '').trim() };
+}
+
+function docmapRoot(ctx) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(ctx.root, 'docmap.json'), 'utf8'));
+    if (Array.isArray(cfg.roots) && cfg.roots[0]) return String(cfg.roots[0]).replace(/\/+$/, '');
+  } catch { /* defaults */ }
+  return 'docs';
+}
+
+const STOPWORDS = new Set(['that', 'this', 'with', 'from', 'into', 'when', 'then', 'than', 'have', 'does', 'should',
+  'para', 'como', 'cuando', 'desde', 'hasta', 'sobre', 'entre', 'pero', 'porque', 'make', 'made', 'adds', 'added', 'update',
+  'updated', 'remove', 'removed', 'implement', 'create', 'created', 'support', 'issue', 'feature', 'epic']);
+
+// Words worth searching for: title, area and tags, normalised the way docmap normalises them.
+function searchTerms(issue) {
+  const text = `${issue.fm.title} ${issue.fm.area ?? ''} ${(issue.fm.tags ?? []).join(' ')}`;
+  const words = text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+  return [...new Set(words)].slice(0, 8);
+}
+
+const RELATED_DIRS = /(^|\/)(decisions|learnings)\//;
+const RELATED_MIN_SCORE = 6; // a frontmatter hit (title, tags, description, read_when); body-only hits are noise
+
+function relatedDocs(ctx, issue, limit = 5) {
+  const script = findDocmap(ctx);
+  if (!script) return [];
+  const terms = searchTerms(issue);
+  if (!terms.length) return [];
+  const r = runDocmap(ctx, script, ['find', ...terms, '--json', '--limit', '0']);
+  if (r.code !== 0 || !r.out) return [];
+  let hits;
+  try { hits = JSON.parse(r.out); } catch { return []; }
+  return hits.filter((h) => RELATED_DIRS.test(h.path) && h.score >= RELATED_MIN_SCORE).slice(0, limit)
+    .map((h) => ({ path: h.path, title: h.title, score: h.score }));
+}
+
+function relatedLines(related) {
+  if (!related.length) return [];
+  return ['related (read before working; decisions constrain, learnings warn):', ...related.map((h) => `  ${h.path}  ${h.title}`)];
+}
+
+// Signals in the Log that a learning is probably hiding in this issue.
+const FRICTION = {
+  blocked: /: blocked: /,
+  unblocked: /: unblocked\b/,
+  revert: /\brevert(ed|ing)?\b/i,
+  retry: /\b(retry|retried|retrying|again)\b/i,
+  workaround: /\bwork[- ]?around\b/i,
+  flaky: /\bflaky\b/i,
+  forced: /done --force|--force\b/,
+  cancelled: /: cancelled: /,
+};
+
+function frictionSignals(issue) {
+  const lines = logLines(issue.body);
+  return Object.entries(FRICTION).filter(([, re]) => lines.some((l) => re.test(l))).map(([k]) => k);
+}
+
+const hasLearning = (issue) => logLines(issue.body).some((l) => /: (learning|decision): /.test(l));
+
+// File a learning (or decision) in docmap for an issue and link it from the Log.
+function fileLearning(ctx, issue, title, { decision = false, description, readWhen, owner } = {}) {
+  const script = findDocmap(ctx);
+  if (!script) {
+    throw new UserError('docmap skill not found next to backlog (or no docs/ in this project); install docmap or write the learning by hand under docs/learnings');
+  }
+  const kind = decision ? 'decisions' : 'learnings';
+  const dir = `${docmapRoot(ctx)}/${kind}`;
+  const tags = [issue.fm.id.toLowerCase(), issue.fm.area, ...(issue.fm.tags ?? [])].filter(Boolean);
+  const args = ['new', dir, title, '--tags', tags.join(','), '--description', description || title];
+  if (readWhen) args.push('--read-when', readWhen);
+  const r = runDocmap(ctx, script, args);
+  if (r.code !== 0) throw new UserError(`docmap new failed: ${r.err || r.out}`);
+  const file = r.out.split('\n')[0];
+  appendLog(issue, owner || issue.fm.owner || defaultOwner(), `${decision ? 'decision' : 'learning'}: ${file}`);
+  const fill = decision ? '## Decision, ## Why and ## Consequences' : '## What happened, ## Lesson and ## Apply when';
+  const readWhenNote = readWhen ? '' : '; set read_when (the situation in which an agent must open it): docmap check fails until it is filled';
+  return { file, note: `${file}\nnow write ${fill}${readWhenNote}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -754,6 +867,7 @@ function cmdBlock(ctx, args) {
   appendLog(issue, args.owner || issue.fm.owner || defaultOwner(), `blocked: ${reason}`);
   writeIndex(ctx, loadIssues(ctx));
   console.log(`${issue.fm.id} blocked: ${reason}`);
+  if (args.learning) console.log(fileLearning(ctx, issue, args.learning, { owner: args.owner }).note);
 }
 
 function cmdUnblock(ctx, args) {
@@ -793,7 +907,8 @@ function cmdDone(ctx, args) {
   const owner = args.owner || issue.fm.owner || defaultOwner();
   issue.body = setSection(issue.body, 'Outcome', outcome);
   if (unchecked.length) appendLog(issue, owner, `done --force with ${unchecked.length} unchecked acceptance criteria`);
-  appendLog(issue, owner, 'done');
+  const firstLine = outcome.split('\n')[0].trim();
+  appendLog(issue, owner, `done: ${firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine}`);
   applyChanges(ctx, store, issue, [{ key: 'status', op: '=', value: 'done' }, { key: 'owner', op: '=', value: '' }], { force: true });
   const pf = progressFile(ctx, issue.fm.id);
   if (fs.existsSync(pf)) fs.unlinkSync(pf);
@@ -802,8 +917,48 @@ function cmdDone(ctx, args) {
   console.log(`${issue.fm.id} done: ${issue.fm.title}`);
   const notice = parentNotice(fresh, issue);
   if (notice) console.log(notice);
+  if (args.learning) console.log(fileLearning(ctx, issue, args.learning, { owner }).note);
+  if (args.decision) console.log(fileLearning(ctx, issue, args.decision, { owner, decision: true }).note);
+  const signals = frictionSignals(issue);
+  if (signals.length && !hasLearning(issue) && findDocmap(ctx)) {
+    console.log(`hint: Log shows ${signals.join(', ')}; if something non-obvious caused it, record it: backlog learn ${issue.fm.id} "<title>"`);
+  }
   if (ctx.cfg.verify) console.log(`next: run "${ctx.cfg.verify}", then commit with ${issue.fm.id} in the message`);
   else console.log(`next: commit with ${issue.fm.id} in the message`);
+}
+
+function cmdLearn(ctx, args) {
+  const [rawId, title] = args._;
+  if (!rawId || !title) throw new UserError('learn: usage: backlog learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]', 2);
+  const store = loadIssues(ctx);
+  const issue = getIssue(ctx, store, rawId);
+  const { note } = fileLearning(ctx, issue, title, { decision: args.decision, description: args.description, readWhen: args['read-when'], owner: args.owner });
+  console.log(note);
+}
+
+// Closed issues whose Log shows friction and that have no learning or decision linked yet.
+function cmdRetro(ctx, args) {
+  const days = args.days === undefined ? 14 : Number(args.days);
+  if (!Number.isInteger(days) || days < 0) throw new UserError('retro: --days must be a non-negative integer', 2);
+  const store = loadIssues(ctx);
+  const closed = store.issues.filter((i) => CLOSED.includes(i.fm.status) && daysSince(i.fm.updated) <= days);
+  const rows = closed
+    .map((i) => ({ issue: i, signals: frictionSignals(i) }))
+    .filter(({ issue, signals }) => signals.length && !hasLearning(issue))
+    .sort((a, b) => compareIssues(ctx.cfg)(a.issue, b.issue));
+  if (args.json) {
+    console.log(JSON.stringify(rows.map(({ issue, signals }) => ({ ...toJson(issue), signals })), null, 2));
+    return 0;
+  }
+  if (!rows.length) {
+    console.log(`retro: nothing to learn from (${closed.length} issues closed in the last ${days} days, none with unrecorded friction)`);
+    return 0;
+  }
+  console.log(`retro: ${rows.length} of ${closed.length} issues closed in the last ${days} days show friction and have no learning yet\n`);
+  console.log(table(['id', 'status', 'closed', 'signals', 'title'],
+    rows.map(({ issue, signals }) => [issue.fm.id, issue.fm.status, issue.fm.updated, signals.join(','), issue.fm.title])));
+  console.log(`\nfor each: backlog show <ID> --brief, then backlog learn <ID> "<what we now know>" (or skip if nothing non-obvious was learned)`);
+  return 0;
 }
 
 function cmdCancel(ctx, args) {
@@ -860,7 +1015,7 @@ function cmdNext(ctx, args) {
     startIssue(ctx, store, issue, owner, args.branch, false);
     const fresh = loadIssues(ctx);
     const claimed = fresh.byId.get(issue.fm.id);
-    if (args.json) console.log(JSON.stringify({ ...toJson(claimed), pick: 'CLAIMED', progress: ctx.rel(progressFile(ctx, claimed.fm.id)) }, null, 2));
+    if (args.json) console.log(JSON.stringify({ ...toJson(claimed), pick: 'CLAIMED', progress: ctx.rel(progressFile(ctx, claimed.fm.id)), related: relatedDocs(ctx, claimed) }, null, 2));
     else {
       console.log(`CLAIMED: ${claimed.fm.id}`);
       console.log(brief(ctx, fresh, claimed));
@@ -1027,9 +1182,11 @@ const COMMANDS = {
   set: { usage: 'set <ID> key=value [key=value...] [--owner o] [--force]', desc: 'update frontmatter with validation (tags+=x, tags-=x, depends_on=A,B)', opts: ['owner'], flags: ['force'], run: cmdSet },
   start: { usage: 'start <ID> --owner <name> [--branch b] [--force]', desc: 'claim: status=in-progress, owner, progress file, log line', opts: ['owner', 'branch'], flags: ['force'], run: cmdStart },
   log: { usage: 'log <ID> "<message>" [--owner name]', desc: 'append a timestamped line to ## Log', opts: ['owner'], flags: [], run: cmdLog },
-  block: { usage: 'block <ID> "<reason>" [--owner name]', desc: 'status=blocked and log the reason', opts: ['owner'], flags: [], run: cmdBlock },
+  block: { usage: 'block <ID> "<reason>" [--owner name] [--learning "<title>"]', desc: 'status=blocked and log the reason', opts: ['owner', 'learning'], flags: [], run: cmdBlock },
   unblock: { usage: 'unblock <ID> [--force]', desc: 'blocked -> in-progress (if owner set) or todo', opts: ['owner'], flags: ['force'], run: cmdUnblock },
-  done: { usage: 'done <ID> [--outcome "..."] [--force]', desc: 'close: requires ticked criteria and a non-empty Outcome', opts: ['outcome', 'owner'], flags: ['force'], run: cmdDone },
+  done: { usage: 'done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]', desc: 'close: requires ticked criteria and a non-empty Outcome', opts: ['outcome', 'owner', 'learning', 'decision'], flags: ['force'], run: cmdDone },
+  learn: { usage: 'learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]', desc: 'file a docmap learning (or decision) for an issue and link it in the Log', opts: ['description', 'read-when', 'owner'], flags: ['decision'], run: cmdLearn },
+  retro: { usage: 'retro [--days N] [--json]', desc: 'closed issues with friction in the Log (blocked, revert, retry...) and no learning yet', opts: ['days'], flags: ['json'], run: cmdRetro },
   cancel: { usage: 'cancel <ID> "<reason>"', desc: 'status=cancelled with a logged reason', opts: ['owner'], flags: [], run: cmdCancel },
   next: { usage: 'next [--area a] [--owner o] [--claim] [--branch b] [--json]', desc: 'pick the best todo issue; exit 3 = nothing to do, 4 = owner is blocked', opts: ['area', 'owner', 'branch'], flags: ['claim', 'json'], run: cmdNext },
   tick: { usage: 'tick <ID> <n|all> [n...]', desc: 'mark acceptance criteria as done (1-based)', opts: [], flags: [], run: cmdTick },
@@ -1071,6 +1228,7 @@ function printHelp(cmd) {
 function main(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') { printHelp(rest[0]); return 0; }
+  if (cmd === '--version' || cmd === '-v') { console.log(`backlog ${VERSION}`); return 0; }
   const spec = COMMANDS[cmd];
   if (!spec) { console.error(`backlog: unknown command "${cmd}"`); printHelp(); return 2; }
   if (rest.includes('--help') || rest.includes('-h')) { printHelp(cmd); return 0; }

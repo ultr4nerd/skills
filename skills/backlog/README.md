@@ -150,16 +150,18 @@ Exit codes: 0 ok, 1 error, 2 usage error or unknown command, 3 nothing to do (`n
 | `start <ID> --owner <name> [--branch b]` | `set status=in-progress owner=<name>`, create `progress/<ID>.md` from the template if missing, append a Log line, print the brief and the verify reminder. |
 | `log <ID> "<message>" [--owner o]` | Append `- YYYY-MM-DD HH:MM owner: message` to `## Log` (section is created if missing). Bumps `updated`. |
 | `tick <ID> <n\|all> [n...]` | Mark acceptance criteria (1-based) as `[x]`. |
-| `block <ID> "<reason>"` | `status=blocked`, log `blocked: <reason>`. The owner and progress file are kept so the work can resume. |
+| `block <ID> "<reason>" [--learning "<title>"]` | `status=blocked`, log `blocked: <reason>`. The owner and progress file are kept so the work can resume. `--learning` files a docmap learning (see below). |
 | `unblock <ID>` | Back to `in-progress` if an owner is set, else `todo`. The usual transition checks apply. |
-| `done <ID> [--outcome "..."] [--force]` | Refuses if any `- [ ]` remains under Acceptance criteria (unless `--force`, which is logged). Outcome comes from `--outcome`, else `## Summary` of the progress file, else an existing non-empty `## Outcome`; refuses if it would be empty. Sets done, clears owner, deletes the progress file, regenerates INDEX, prints the open-children count of the parent epic and a reminder to verify and commit. |
+| `done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]` | Refuses if any `- [ ]` remains under Acceptance criteria (unless `--force`, which is logged). Outcome comes from `--outcome`, else `## Summary` of the progress file, else an existing non-empty `## Outcome`; refuses if it would be empty. Sets done, clears owner, deletes the progress file, regenerates INDEX, logs `done: <first line of outcome>`, prints the open-children count of the parent epic and a reminder to verify and commit. With docmap installed, prints a hint when the Log shows friction and no learning is linked; `--learning`/`--decision` file one. |
+| `learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]` | Needs docmap. Runs `docmap new docs/learnings` (or `docs/decisions`) with tags `[<id>, <area>, ...issue tags]`, logs `learning: <path>` on the issue, prints the path and which sections to write. Without `--read-when` the new doc fails `docmap check` until you set it, on purpose. |
+| `retro [--days N] [--json]` | Closed issues (done or cancelled) updated in the last N days (default 14) whose Log shows friction (`blocked`, `unblocked`, `revert`, `retry`/`again`, `workaround`, `flaky`, `--force`, `cancelled`) and that have no `learning:`/`decision:` log line. One row per candidate with its signals. |
 | `cancel <ID> "<reason>"` | `status=cancelled`, log the reason, clear owner, delete the progress file. |
-| `next [--area a] [--owner o] [--claim] [--branch b] [--json]` | Pick the best issue: `todo`, not an epic, all `depends_on` done; ordered by priority, earliest due, oldest created, lowest id. With `--owner`: if that owner already has an in-progress issue, print it as `RESUME` (exit 0); if they have a blocked one, print it as `BLOCKED` with the reason (exit 4). `--claim` runs `start`. Nothing available prints `NOTHING TO DO` (exit 3). |
+| `next [--area a] [--owner o] [--claim] [--branch b] [--json]` | Pick the best issue: `todo`, not an epic, all `depends_on` done; ordered by priority, earliest due, oldest created, lowest id. With `--owner`: if that owner already has an in-progress issue, print it as `RESUME` (exit 0); if they have a blocked one, print it as `BLOCKED` with the reason (exit 4). `--claim` runs `start`. Nothing available prints `NOTHING TO DO` (exit 3). With docmap installed the brief ends with `related:` lines (see below); `--json` carries them as `related`. |
 | `board` | Counts per status, in-progress with owner and days since last update, blocked with reasons, overdue, top 5 ready todo. |
 | `stale` | In-progress or blocked issues not updated within `staleDays`. |
 | `index` | Regenerate `backlog/INDEX.md`. Deterministic: same issues, same bytes. |
 | `check [--fix]` | Validate the tracker (see below). `--fix` regenerates INDEX first. Prints `backlog check: OK (N issues)` on success. |
-| `help`, `<cmd> --help` | Usage. |
+| `help`, `<cmd> --help`, `--version` | Usage; version (matches the repo's `package.json`). |
 
 ### Transition rules (`set`, `start`, `unblock`)
 
@@ -180,6 +182,30 @@ stale or missing INDEX, orphan `progress/*.md` whose issue is not in progress or
 
 Warnings (exit 0): done with unchecked criteria, todo or in-progress whose parent epic is still `backlog`, in-progress not updated for more than `staleDays`,
 overdue issues, todo (non-epic) with no acceptance criteria.
+
+## Project memory: the docmap bridge
+
+Learnings only pay off if they resurface when the same mistake is about to be made, and they
+only get written if something asks for them while the friction is fresh. When the
+[docmap](../docmap/) skill is installed next to this one (same `skills/` parent, or under
+`.claude/skills/` / `.agents/skills/` of the project) and the project has `docmap.json` or
+`docs/`, backlog adds three programmatic hooks. Without docmap all three are silent no-ops; set
+`BACKLOG_DOCMAP=0` to disable them, or `BACKLOG_DOCMAP=<path to docmap.mjs>` to point elsewhere.
+
+- **Surface at claim time.** `next`, `start` and `show --brief` on an open issue run
+  `docmap find` with the words of the title, area and tags, keep hits under `decisions/` or
+  `learnings/` whose score comes from frontmatter (title, tags, description, `read_when`), and
+  print up to five as `related:`. Cost: one `spawnSync`, ~100 tokens of output.
+- **Capture at close time.** `done --learning "<title>"`, `done --decision "<title>"`,
+  `block --learning "<title>"` and the standalone `learn` create the numbered doc tagged with
+  the issue id and link it from the Log. `done` also prints a hint when the Log shows friction
+  (blocked, revert, retry, workaround, `--force`) and nothing was recorded.
+- **Sweep periodically.** `retro` lists the closed issues that still owe a learning, so capture
+  does not depend on in-the-moment discipline. Weekly is enough.
+
+The quality of this loop is the quality of each learning's `read_when`: it is the line
+`docmap find` scores highest and the one an agent reads to decide whether to open the file.
+Write the situation ("Setting cookies behind the ingress"), not the topic ("cookies").
 
 ## The work loop
 
@@ -237,12 +263,18 @@ backlog block 3 "session store credentials missing in .env"   # stops here, exit
 backlog board          # 1 blocked (reason shown), 1 done, what is next
 backlog check          # OK (4 issues, 1 warning)
 backlog show 3 --brief # read the Log, provide the credential, then: backlog unblock 3
+
+# friday: retro (with docmap installed)
+backlog retro                                   # ISS-0003  blocked  ...  (no learning yet)
+backlog learn 3 "Session store needs creds in .env before the cookie work" \
+  --read-when "Starting any issue that touches the session store"
 ```
 
 ## Development
 
 ```sh
-node --test scripts/backlog.test.mjs
+node --test scripts/backlog.test.mjs          # from this folder
+npm run verify                                # from the repo root: every skill's tests + packaging checks
 ```
 
 Tests run the CLI against temporary fixtures with a fixed clock (`BACKLOG_NOW`), covering every
