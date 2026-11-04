@@ -1,0 +1,8 @@
+{
+  "dir": "backlog",
+  "prefix": "ISS",
+  "areas": ["docmap", "backlog", "design", "content", "setup", "repo"],
+  "progressDir": "progress",
+  "staleDays": 7,
+  "verify": "npm run verify"
+}

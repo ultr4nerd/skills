@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // verify: the single definition of "green" for this repo. Runs every skill's tests, checks
 // that every skill has a SKILL.md with name + description matching its folder, that the README
-// catalog lists every skill, and that each CLI answers --version with the version in package.json.
+// catalog lists every skill, that each CLI answers --version with the version in package.json,
+// and that this repo's own docs/ and backlog/ (dogfooding) are consistent.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,6 +37,14 @@ for (const name of skills) {
     const v = (r.stdout || '').trim();
     if (r.status !== 0 || v !== `${name} ${pkg.version}`) problems.push(`${name}: "--version" printed "${v}" (exit ${r.status}), expected "${name} ${pkg.version}"`);
   }
+}
+
+for (const [skill, args] of [['docmap', ['check']], ['backlog', ['check']]]) {
+  const cli = path.join(skillsDir, skill, 'scripts', `${skill}.mjs`);
+  if (!fs.existsSync(cli)) continue;
+  const r = spawnSync(process.execPath, [cli, ...args], { cwd: ROOT, encoding: 'utf8' });
+  if (r.status !== 0) problems.push(`${skill} ${args.join(' ')} failed:\n${(r.stdout + r.stderr).trim()}`);
+  else console.log((r.stdout || '').trim());
 }
 
 const tests = spawnSync(process.execPath, ['--test', ...skills.map((n) => path.join(skillsDir, n, 'scripts', `${n}.test.mjs`)).filter((f) => fs.existsSync(f))], { encoding: 'utf8', stdio: 'inherit' });

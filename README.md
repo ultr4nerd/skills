@@ -64,10 +64,16 @@ Requirements: Node >= 20. No npm dependencies.
 
 See each skill's `README.md` for details and `SKILL.md` for the agent protocol.
 
+## This repo runs on its own skills
+
+`backlog/` holds the work on the skills themselves, `docs/decisions` and `docs/learnings` the
+reasons, `AGENTS.md` the rules. `npm run backlog -- next --claim` shows the related decisions
+before you start.
+
 ## Development
 
 ```sh
-npm run verify     # every skill's tests + packaging checks (SKILL.md frontmatter, catalog, --version)
+npm run verify     # every skill's tests + packaging checks + docmap check + backlog check
 npm test           # tests only
 ```
 

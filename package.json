@@ -4,9 +4,13 @@
   "private": true,
   "description": "Agent skills for running projects with coding agents. Zero-dependency CLIs.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test skills/*/scripts/*.test.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "docs": "node skills/docmap/scripts/docmap.mjs",
+    "backlog": "node skills/backlog/scripts/backlog.mjs"
   }
 }
