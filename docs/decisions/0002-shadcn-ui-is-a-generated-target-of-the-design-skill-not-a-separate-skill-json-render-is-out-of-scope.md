@@ -49,6 +49,11 @@ no separate shadcn skill. json-render is not adopted.
   have to name those roles up front.
 - shadcn changes fast (styles, Radix vs Base UI, variable set): the mapping lives in one versioned
   file so an upgrade is a single edit plus a decision update.
-- Components copied into `components/ui/` can drift when an agent edits them; `check` reports
-  arbitrary values there like anywhere else.
-- Work tracked in ISS-0005.
+- Components copied into `components/ui/` can drift when an agent edits them. They are exempt from
+  the palette and arbitrary-value rules (stock shadcn code uses `bg-black/50` and `h-[calc(...)]`, so
+  checking them would fail every fresh install); hex and primitive rules still apply. Drift there is
+  reviewed by diffing after `shadcn add` (the `shadcn` target note records local changes).
+- Implemented in ISS-0005 with these choices: the mapping lives in `design.json` (`shadcn.vars`),
+  not in a Markdown note, so the CLI never parses prose; generated shadcn variables hold resolved
+  values, not `var(--color-x)`, because shadcn's `--color-x: var(--x)` would make a cycle; `chart-*`
+  and `sidebar-*` are optional (warning), the rest required (error).

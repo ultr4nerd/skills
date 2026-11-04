@@ -36,6 +36,18 @@ const LEVELS = { AA: 4.5, 'AA-large': 3, AAA: 7, 'AAA-large': 4.5, ui: 3 };
 const TAILWIND_NAMESPACES = ['color', 'font', 'text', 'font-weight', 'tracking', 'leading', 'tab-size',
   'breakpoint', 'container', 'spacing', 'radius', 'shadow', 'inset-shadow', 'drop-shadow', 'blur',
   'perspective', 'zoom', 'aspect', 'ease', 'animate'];
+// shadcn/ui theme variables (Tailwind v4 globals.css). The only place this list lives: when shadcn
+// changes its set, edit it here and update decision 0002.
+const SHADCN_REQUIRED = ['background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
+  'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'muted', 'muted-foreground',
+  'accent', 'accent-foreground', 'destructive', 'border', 'input', 'ring', 'radius'];
+const SHADCN_OPTIONAL = ['destructive-foreground', 'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'sidebar',
+  'sidebar-foreground', 'sidebar-primary', 'sidebar-primary-foreground', 'sidebar-accent',
+  'sidebar-accent-foreground', 'sidebar-border', 'sidebar-ring'];
+const SHADCN_ROLES = [...SHADCN_REQUIRED, ...SHADCN_OPTIONAL];
+const SHADCN_RADIUS_NAMES = ['sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl']; // shadcn's @theme inline derives these from --radius
+const TW_PALETTE_RE = /(?<![\w-])-?(?:bg|text|border(?:-[xytrblse])?|ring(?:-offset)?|outline|decoration|divide|fill|stroke|from|via|to|accent|caret|shadow|placeholder)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)|black|white)(?:\/\d+)?(?![\w-])/g;
+const TW_ARBITRARY_RE = /(?<![\w-])-?[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\[([^\]\s]+)\](?!:)/g;
 const SCAN_DIR_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.less', '.js', '.jsx', '.mjs', '.cjs', '.ts',
   '.tsx', '.vue', '.svelte', '.astro', '.html', '.mdx']);
 const ALWAYS_SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage']); // dot-dirs (.git, .next) are skipped too
@@ -49,7 +61,9 @@ const DEFAULT_CONFIG = {
   css: { prefix: '', tailwind: false, tailwindReset: ['color'] },
   budgets: { design: 150, component: 80, tokens: 300 },
   scan: { include: [], exclude: [], allow: [], sizes: false, severity: 'error' },
+  shadcn: null,
 };
+const SHADCN_DEFAULTS = { vars: {}, import: '@/components/ui', dir: 'components/ui' };
 
 // Errors meant for the user: printed as one line, never as a stack trace.
 class UserError extends Error {
@@ -192,6 +206,16 @@ function loadConfig(root) {
   if (config.css.prefix && !/^[a-z][a-z0-9-]*$/.test(config.css.prefix)) throw new UserError(`${CONFIG_FILE}: "css.prefix" must be lowercase letters, digits and hyphens`);
   for (const [k, v] of Object.entries(config.budgets)) {
     if (!Number.isInteger(v) || v < 1) throw new UserError(`${CONFIG_FILE}: "budgets.${k}" must be a positive integer`);
+  }
+  if (config.shadcn !== null) {
+    if (!isObject(config.shadcn)) throw new UserError(`${CONFIG_FILE}: "shadcn" must be an object`);
+    config.shadcn = { ...SHADCN_DEFAULTS, ...config.shadcn };
+    if (!isObject(config.shadcn.vars) || !Object.values(config.shadcn.vars).every((v) => typeof v === 'string')) {
+      throw new UserError(`${CONFIG_FILE}: "shadcn.vars" must map a shadcn variable name to a token path`);
+    }
+    for (const key of ['import', 'dir']) {
+      if (typeof config.shadcn[key] !== 'string' || !config.shadcn[key]) throw new UserError(`${CONFIG_FILE}: "shadcn.${key}" must be a non-empty string`);
+    }
   }
   return config;
 }
@@ -1224,15 +1248,44 @@ function themeChanges(ctx, system, theme) {
   return changed;
 }
 
+// Tailwind: semantic/component tokens named after a Tailwind namespace go in @theme (they get
+// utilities); primitives and everything else stay in :root (no utilities, so no bg-primitive-*).
+// With shadcn, colors stay out of @theme: shadcn's `@theme inline` owns the color utilities.
+function inTailwindTheme(ctx, set, rec) {
+  if (!ctx.config.css.tailwind || rec.tier === 'primitive' || set.typeOf(rec) === 'typography') return false;
+  const ns = namespaceOf(ctx, rec);
+  return ns !== null && !(ctx.config.shadcn && ns === 'color');
+}
+
+function tailwindReset(ctx) {
+  return asArray(ctx.config.css.tailwindReset).filter((ns) => !(ctx.config.shadcn && ns === 'color'));
+}
+
+// shadcn variables as [name, value] in SHADCN_ROLES order. Values are resolved, never var(--color-x):
+// shadcn's `@theme inline { --color-x: var(--x) }` would otherwise make a reference cycle.
+function shadcnDecls(ctx, set) {
+  const vars = ctx.config.shadcn.vars;
+  const decls = [];
+  for (const role of SHADCN_ROLES) {
+    const rec = vars[role] !== undefined ? set.byPath.get(vars[role]) : null;
+    const value = rec ? set.resolve(rec.path) : null;
+    if (value === null || set.typeOf(rec) !== shadcnType(role)) continue;
+    decls.push([`--${role}`, cssValue(ctx, set.typeOf(rec), value, null, false)]);
+  }
+  return decls;
+}
+
+const shadcnType = (role) => (role === 'radius' ? 'dimension' : 'color');
+
 function renderCss(ctx, system) {
   const { base } = system;
   const tailwind = ctx.config.css.tailwind;
+  const shadcn = ctx.config.shadcn;
   const lines = [generatedHeader(system, 'css')];
   if (tailwind) lines.push('/* Import after `@import "tailwindcss";`. Utilities exist for semantic tokens only. */');
+  if (shadcn) lines.push('/* shadcn/ui: keep the `@theme inline` block of globals.css and delete its :root and .dark blocks; these replace them. */');
   lines.push('');
-  // Tailwind: semantic/component tokens named after a Tailwind namespace go in @theme (they get
-  // utilities); primitives and everything else stay in :root (no utilities, so no bg-primitive-*).
-  const inTheme = (rec) => tailwind && rec.tier !== 'primitive' && base.typeOf(rec) !== 'typography' && namespaceOf(ctx, rec) !== null;
+  const inTheme = (rec) => inTailwindTheme(ctx, base, rec);
   const rootRecs = base.records.filter((r) => !inTheme(r));
   const themeRecs = base.records.filter(inTheme);
   const block = (selector, recs, set, indent = '  ') => {
@@ -1250,13 +1303,23 @@ function renderCss(ctx, system) {
   };
   if (rootRecs.length) lines.push(...block(':root', rootRecs, base), '');
   if (tailwind) {
-    const reset = asArray(ctx.config.css.tailwindReset).map((ns) => `  --${ns}-*: initial;`);
+    const reset = tailwindReset(ctx).map((ns) => `  --${ns}-*: initial;`);
     const body = block('@theme', themeRecs, base);
     lines.push(body[0], ...reset, ...body.slice(1), '');
   }
   for (const theme of system.themes.values()) {
     const changed = themeChanges(ctx, system, theme);
     if (changed.length) lines.push(...block(themeSelector(ctx, theme.name), changed, theme.set), '');
+  }
+  if (shadcn) {
+    const baseDecls = shadcnDecls(ctx, base);
+    const decl = ([n, v]) => `  ${n}: ${v};`;
+    if (baseDecls.length) lines.push('/* shadcn/ui (design.json "shadcn.vars") */', ':root {', ...baseDecls.map(decl), '}', '');
+    const baseValues = new Map(baseDecls);
+    for (const theme of system.themes.values()) {
+      const changed = shadcnDecls(ctx, theme.set).filter(([n, v]) => baseValues.get(n) !== v);
+      if (changed.length) lines.push(`${themeSelector(ctx, theme.name)} {`, ...changed.map(decl), '}', '');
+    }
   }
   const typo = base.records.filter((r) => r.tier !== 'primitive' && base.typeOf(r) === 'typography' && base.resolve(r.path));
   for (const rec of typo) {
@@ -1365,7 +1428,7 @@ function renderTokensMd(ctx, system) {
     '',
     generatedHeader(system, 'md'),
     '',
-    `Use names, never values. ${sample ? `CSS \`var(${cssName(ctx, sample.path)})\`, TS \`tokens['${sample.path}']\`` : 'CSS `var(--<name with dots as dashes>)`'}${ctx.config.css.tailwind ? '; Tailwind utilities use the same names (`bg-surface`, `p-md`, `rounded-card`); `type.*` are utility classes' : ''}.`,
+    `Use names, never values. ${sample ? `CSS \`var(${cssName(ctx, sample.path)})\`, TS \`tokens['${sample.path}']\`` : 'CSS `var(--<name with dots as dashes>)`'}${ctx.config.css.tailwind ? `; Tailwind utilities use the same names (${ctx.config.shadcn ? '`p-md`, `rounded-card`; colors through the shadcn roles below' : '`bg-surface`, `p-md`, `rounded-card`'}); \`type.*\` are utility classes` : ''}.`,
     `\`primitive.*\` is never used in code. \`(provisional)\` may still change.${themeNames.length ? ` Themes: ${themeNames.join(', ')}.` : ''} "on:" lists checked backgrounds with contrast ratios.`,
   ];
   const groups = new Map();
@@ -1402,6 +1465,7 @@ function renderTokensMd(ctx, system) {
       lines.push(line);
     }
   }
+  if (ctx.config.shadcn) lines.push(...shadcnMd(ctx));
   const prims = new Map();
   for (const rec of base.records.filter((r) => r.tier === 'primitive')) {
     const key = rec.segs.slice(0, 2).join('.');
@@ -1414,6 +1478,19 @@ function renderTokensMd(ctx, system) {
     lines.push('', 'Details: `design show primitive`.');
   }
   return `${lines.join('\n')}\n`;
+}
+
+// The shadcn role -> token mapping, one line per role and its foreground.
+function shadcnMd(ctx) {
+  const vars = ctx.config.shadcn.vars;
+  const lines = ['', '## shadcn/ui roles', '', 'Classes name the role (`bg-background`, `text-muted-foreground`, `border-border`, `rounded-lg`); never a palette class or an arbitrary value.', ''];
+  const fgOf = (role) => (role === 'background' ? 'foreground' : `${role}-foreground`);
+  for (const role of SHADCN_ROLES) {
+    if (role === 'foreground' || role.endsWith('-foreground') || vars[role] === undefined) continue;
+    const fg = fgOf(role);
+    lines.push(`- \`${role}\` \`${vars[role]}\`${vars[fg] !== undefined ? `, \`${fg}\` \`${vars[fg]}\`` : ''}`);
+  }
+  return lines;
 }
 
 function renderInventory(ctx, docs) {
@@ -1663,8 +1740,15 @@ function scanSource(ctx, system, paths) {
   const prefix = ctx.config.css.prefix ? `--${ctx.config.css.prefix}-primitive-` : '--primitive-';
   const primVar = ctx.config.css.prefix ? new RegExp(`${prefix}[a-z0-9-]+`, 'g') : PRIM_VAR_RE;
   const deprecatedVars = new Map(system ? system.base.records.filter((r) => r.deprecated).map((r) => [cssName(ctx, r.path), r]) : []);
+  // shadcn: class rules skip the copied components (stock code uses bg-black/50 and arbitrary values);
+  // imports from the ui alias must name a component in the DESIGN.md inventory.
+  const shadcn = ctx.config.shadcn;
+  const uiDir = shadcn ? `${toPosix(path.normalize(shadcn.dir)).replace(/\/+$/, '')}/` : null;
+  const uiImport = shadcn ? new RegExp(`['"]${shadcn.import.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/([\\w-]+)['"]`, 'g') : null;
+  const inventory = shadcn ? new Set(loadDocs(ctx).filter((d) => d.kind === 'component').map((d) => path.basename(d.abs, '.md'))) : null;
   const files = scanFiles(ctx, paths);
   for (const rel of files) {
+    const vendored = uiDir && rel.startsWith(uiDir);
     const lines = readLines(path.resolve(ctx.root, rel));
     lines.forEach((line, i) => {
       if (line.includes('design-allow') || line.length > 2000) return;
@@ -1691,6 +1775,16 @@ function scanSource(ctx, system, paths) {
       for (const m of line.matchAll(/var\((--[A-Za-z0-9-]+)\)/g)) {
         const rec = deprecatedVars.get(m[1]);
         if (rec) add('deprecated', m[1], `deprecated token ${rec.path}${typeof rec.deprecated === 'string' ? `: ${rec.deprecated}` : ''}`);
+      }
+      if (!shadcn) return;
+      if (!vendored) {
+        for (const m of line.matchAll(TW_PALETTE_RE)) add('class', m[0], `Tailwind palette class ${m[0]}; use a shadcn role (bg-muted, text-muted-foreground, border-border) or a token`);
+        for (const m of line.matchAll(TW_ARBITRARY_RE)) {
+          if (!m[1].startsWith('var(--')) add('class', m[0], `arbitrary value ${m[0]}; use a token utility, or add a token`);
+        }
+      }
+      for (const m of line.matchAll(uiImport)) {
+        if (!inventory.has(m[1])) add('component', m[1], `shadcn component ${m[1]} is not in the DESIGN.md inventory; add a spec (design new component ${m[1]}) or use one that is`);
       }
     });
   }
@@ -1866,6 +1960,62 @@ define('build', {
 
 // ---- check --------------------------------------------------------------------
 
+// shadcn mapping: every role resolves to a semantic token of the right type, required roles are
+// mapped, X-foreground passes AA on X in every theme, and no @theme name collides with shadcn's.
+function checkShadcn(ctx, system, report) {
+  const { vars } = ctx.config.shadcn;
+  const { base } = system;
+  for (const [role, tokenPath] of Object.entries(vars)) {
+    const where = `shadcn.vars.${role}`;
+    if (!SHADCN_ROLES.includes(role)) {
+      const near = SHADCN_ROLES.map((r) => [r, editDistance(r, role)]).sort((a, b) => a[1] - b[1])[0];
+      report('error', CONFIG_FILE, null, `${where}: not a shadcn variable${near[1] <= 3 ? ` (did you mean ${near[0]}?)` : ''}`);
+      continue;
+    }
+    const rec = base.byPath.get(tokenPath);
+    if (!rec) report('error', CONFIG_FILE, null, `${where}: unknown token ${tokenPath}${suggestToken(system, tokenPath)}`);
+    else if (rec.tier === 'primitive') report('error', CONFIG_FILE, null, `${where}: ${tokenPath} is a primitive; map a semantic token`);
+    else if (base.typeOf(rec) !== shadcnType(role)) report('error', CONFIG_FILE, null, `${where}: ${tokenPath} is a ${base.typeOf(rec)}, needs a ${shadcnType(role)}`);
+  }
+  const missing = SHADCN_REQUIRED.filter((r) => vars[r] === undefined);
+  if (missing.length) report('error', CONFIG_FILE, null, `shadcn.vars: ${missing.length} required variable(s) not mapped: ${missing.join(', ')}`);
+  const optional = SHADCN_OPTIONAL.filter((r) => r !== 'destructive-foreground' && vars[r] === undefined);
+  if (optional.length) report('warn', CONFIG_FILE, null, `shadcn.vars: not mapped: ${optional.join(', ')} (shadcn Chart and Sidebar use them)`);
+
+  const sets = [[null, base, null], ...[...system.themes.values()].map((t) => [t.name, t.set, new Set(themeChanges(ctx, system, t).map((r) => r.path))])];
+  for (const [label, set, changed] of sets) {
+    const tokenPairs = new Set(contrastPairs(set).map((p) => `${p.fg}|${p.bg}`));
+    const pairs = SHADCN_ROLES.filter((r) => r.endsWith('-foreground') || r === 'foreground')
+      .map((fg) => [fg, fg === 'foreground' ? 'background' : fg.slice(0, -'-foreground'.length)]);
+    pairs.push(['muted-foreground', 'background']);
+    for (const [fgRole, bgRole] of pairs) {
+      const fgPath = vars[fgRole];
+      const bgPath = vars[bgRole];
+      if (!fgPath || !bgPath || fgPath === bgPath || tokenPairs.has(`${fgPath}|${bgPath}`)) continue;
+      if (changed && !changed.has(fgPath) && !changed.has(bgPath)) continue;
+      const fgRec = set.byPath.get(fgPath);
+      const bgRec = set.byPath.get(bgPath);
+      if (!fgRec || !bgRec || set.typeOf(fgRec) !== 'color' || set.typeOf(bgRec) !== 'color') continue;
+      const fg = set.resolve(fgPath);
+      const bg = set.resolve(bgPath);
+      if (!fg || !bg) continue;
+      const ratio = contrastRatio(fg, bg);
+      if (ratio >= LEVELS.AA) continue;
+      const fix = suggestForeground(fg, bg, LEVELS.AA);
+      const hint = fix ? `; nearest passing foreground ${toHex(fix)} (${contrastRatio(fix, bg).toFixed(2)}:1)` : '';
+      report('error', CONFIG_FILE, null, `contrast shadcn ${fgRole} (${fgPath}) on ${bgRole} (${bgPath})${label ? ` [theme ${label}]` : ''}: ${ratio.toFixed(2)}:1, needs ${LEVELS.AA}:1 (AA)${hint}`);
+    }
+  }
+
+  const taken = new Set(SHADCN_RADIUS_NAMES.map((n) => `--radius-${n}`));
+  for (const rec of base.records) {
+    const name = cssName(ctx, rec.path);
+    if (inTailwindTheme(ctx, base, rec) && taken.has(name)) {
+      report('error', rec.file, null, `${rec.path}: ${name} collides with shadcn's @theme inline (it derives ${name} from --radius); rename the token or map it as shadcn.vars.radius`);
+    }
+  }
+}
+
 function runCheck(ctx, opts) {
   const problems = [];
   const report = (level, file, line, message) => problems.push({ level, file, line, message });
@@ -1897,6 +2047,7 @@ function runCheck(ctx, opts) {
       const changed = new Set(themeChanges(ctx, system, theme).map((r) => r.path));
       evaluatePairs(theme.set, problems, theme.name, theme.file, changed);
     }
+    if (ctx.config.shadcn) checkShadcn(ctx, system, report);
     const outputs = computeOutputs(ctx, system, docs);
     for (const f of staleOutputs(outputs)) report('error', f.rel, null, 'generated output is stale or missing: run "design build"');
     const md = ctx.config.outputs.md && outputs.find((f) => f.rel === toPosix(ctx.config.outputs.md));
@@ -2220,7 +2371,7 @@ define('contrast', {
 
 define('new', {
   summary: 'scaffold a component spec, target or reference note from a template',
-  usage: 'design new <component|target|reference> "<name>" [--description ".."] [--read-when ".."] [--source <path|url>]\n\n  target presets: wallet-pass, email, print, og-image (others get the generic template)\n  component: also refreshes the DESIGN.md inventory',
+  usage: 'design new <component|target|reference> "<name>" [--description ".."] [--read-when ".."] [--source <path|url>]\n\n  target presets: wallet-pass, email, print, og-image, shadcn (others get the generic template)\n  component: also refreshes the DESIGN.md inventory',
   flags: { description: 'string', 'read-when': 'string', source: 'string' },
   run(ctx, { opts, positional }, io) {
     const [kind, name] = positional;

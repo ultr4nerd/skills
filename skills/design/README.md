@@ -92,7 +92,8 @@ Every Markdown file carries docmap frontmatter (`title`, `description`, `read_wh
   "outputs": { "css": "design/tokens.css", "ts": "design/tokens.ts", "json": null, "md": "design/TOKENS.md" },
   "css": { "prefix": "", "tailwind": false, "tailwindReset": ["color"] },
   "budgets": { "design": 150, "component": 80, "tokens": 300 },
-  "scan": { "include": [], "exclude": [], "allow": [], "sizes": false, "severity": "error" }
+  "scan": { "include": [], "exclude": [], "allow": [], "sizes": false, "severity": "error" },
+  "shadcn": null
 }
 ```
 
@@ -116,6 +117,7 @@ Every Markdown file carries docmap frontmatter (`title`, `description`, `read_wh
 | `scan.allow` | literal values never reported (`"#000000"`) |
 | `scan.sizes` | also report `px`/`rem` literals (0 and 1px are ignored) |
 | `scan.severity` | `error` or `warn` for scan findings (use `warn` while migrating an existing codebase) |
+| `shadcn` | turns on the shadcn/ui target: `{ "vars": { "<variable>": "<token path>" }, "import": "@/components/ui", "dir": "components/ui" }` (see [shadcn/ui](#shadcnui)) |
 
 The project root is the nearest directory with `design.json`, else `.git`, else the current
 directory. Output paths are relative to it, with forward slashes.
@@ -213,6 +215,51 @@ Standard DTCG 2025.10 with a few conventions:
 - **DESIGN.md inventory**: the table between `<!-- design:components:start -->` and
   `<!-- design:components:end -->`, built from each spec's `title`, `status` and `read_when`.
 
+## shadcn/ui
+
+Opt-in with a `shadcn` key in `design.json` (decision record: `docs/decisions/0002-*` in the skills
+repo). The tokens stay the only source; shadcn's theme variables are generated from them.
+
+```json
+{
+  "css": { "tailwind": true },
+  "themes": { "dark": "design/themes/dark.json" },
+  "themeSelector": ".{name}",
+  "shadcn": {
+    "vars": {
+      "background": "color.surface", "foreground": "color.on-surface",
+      "primary": "color.primary", "primary-foreground": "color.on-primary",
+      "muted": "color.surface-raised", "muted-foreground": "color.on-surface-muted",
+      "border": "color.border", "ring": "color.focus", "radius": "radius.control"
+    },
+    "import": "@/components/ui",
+    "dir": "components/ui"
+  }
+}
+```
+
+- **Wiring**: keep shadcn's `@theme inline` block in `globals.css`, delete its `:root` and `.dark`
+  blocks, and import `tokens.css` instead. `themeSelector: ".{name}"` matches shadcn's `.dark`.
+- **Build**: a `:root` block with `--background`, `--primary`, ..., `--radius` and one block per theme
+  with the variables whose value changes. Values are resolved (`#2856d9`), not `var(--color-primary)`:
+  shadcn defines `--color-primary: var(--primary)`, so a reference back would be a cycle. Color tokens
+  leave `@theme` and the `color` reset is skipped, because shadcn's `@theme inline` owns the color
+  utilities (`bg-primary`, `text-muted-foreground`). Spacing, radius, fonts and shadows keep theirs.
+  TOKENS.md gains a "shadcn/ui roles" section with the mapping.
+- **Check**: every required variable mapped (`background`, `foreground`, `card`, `popover`, `primary`,
+  `secondary`, `muted`, `accent` and their `-foreground`, `destructive`, `border`, `input`, `ring`,
+  `radius`), each to an existing semantic token of the right type, unknown names with a "did you mean";
+  `X-foreground` on `X` (and `muted-foreground` on `background`) at AA in every theme, skipping pairs the
+  tokens already check; a warning while `chart-*` or `sidebar-*` are unmapped; an error when a Tailwind
+  radius token would be `--radius-sm|md|lg|xl|2xl|3xl|4xl`, which shadcn derives from `--radius`.
+- **Scan** (with `scan.include`): Tailwind palette classes (`bg-zinc-500`, `text-white`), arbitrary values
+  (`p-[13px]`; `[var(--x)]` is allowed) and imports from `shadcn.import` of a component without a spec in
+  `design/components/` (file name = shadcn name: `dropdown-menu.md`). Files under `shadcn.dir` are exempt
+  from the class rules, because stock shadcn code uses `bg-black/50` and arbitrary values; hex and
+  primitive rules still apply there. `design-allow` opts a line out.
+- The variable list lives in one constant (`SHADCN_REQUIRED`/`SHADCN_OPTIONAL` in `design.mjs`). Checked
+  against shadcn's Tailwind v4 docs in November 2026.
+
 ## What `check` reports
 
 Errors (exit 1):
@@ -228,6 +275,8 @@ Errors (exit 1):
 - broken relative links in design docs; backticked token names (`color.primry`) or CSS variables
   (`--color-primry`) that do not exist, with a "did you mean"; HTML comments are skipped
 - with `scan.include`: hard-coded colors (and sizes), primitive tokens in source (severity configurable)
+- with `shadcn`: unmapped, unknown or mistyped variables, failing `X-foreground` pairs, radius collisions,
+  and in source palette classes, arbitrary values and ui imports outside the inventory (see above)
 
 Warnings: shorthand values, `em` units, a contrast background with transparency (assumed over white),
 `srgb` colors whose `hex` disagrees with their components, component specs over budget, TOKENS.md
@@ -248,6 +297,8 @@ against the vendors' docs in October 2026; re-check before shipping) and a token
 - `print`: CMYK/Pantone recorded per primitive in the `print` extension, bleed, 300 ppi, small-text rules,
   px to pt.
 - `og-image`: 1200x630, Satori/`next/og` CSS subset and font formats, resolved values only.
+- `shadcn`: how the project wires shadcn/ui (globals.css, `components.json` aliases) and which
+  components are in use; the mapping itself lives in `design.json`, not in the note.
 
 ## With docmap and backlog
 

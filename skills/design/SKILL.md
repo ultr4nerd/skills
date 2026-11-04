@@ -38,6 +38,12 @@ Never edit generated files (TOKENS.md, tokens.css/.ts, the inventory block in DE
    If no token fits, add one (below); do not hard-code.
 5. Run `design check`; it must print `design check: OK`.
 
+With shadcn/ui (`shadcn` in design.json): classes name shadcn roles (`bg-background`,
+`text-muted-foreground`, `rounded-lg`), never palette classes (`bg-zinc-500`) or arbitrary values
+(`p-[13px]`). Import only components that have a spec; add one with `npx shadcn@latest add <name>`
+plus `design new component <name>`. Theme variables come from `shadcn.vars`; never edit them in
+globals.css. Setup: README "shadcn/ui", `design new target shadcn`.
+
 DESIGN.md and the tokens win over generic taste and other design skills. An explicit user instruction
 wins over DESIGN.md; then update the system and record the decision.
 
@@ -61,7 +67,7 @@ wins over DESIGN.md; then update the system and record the decision.
      `type.*` tokens carry family, size, weight, line height.
 4. **Components** only when a real screen needs them: `design new component <name>` (fills the DESIGN.md
    inventory); `component.<name>.*` tokens only for values unique to that component.
-5. **Targets** for surfaces with hard limits: `design new target wallet-pass|email|print|og-image|<name>`,
+5. **Targets** for surfaces with hard limits: `design new target wallet-pass|email|print|og-image|shadcn|<name>`,
    map tokens to the surface's formats, link it from the Surfaces table in DESIGN.md.
 6. `design fmt` (canonical 2025.10 objects, so you may type `"#e5452d"` or `"16px"`), `design build`,
    `design check`.
