@@ -1,0 +1,16 @@
+{
+  "roots": [
+    "docs"
+  ],
+  "indexName": "INDEX.md",
+  "exclude": [
+    "**/assets/**",
+    "**/node_modules/**"
+  ],
+  "numbered": [
+    "docs/decisions",
+    "docs/learnings"
+  ],
+  "maxDescription": 160,
+  "templatesDir": "skills/docmap/templates"
+}
