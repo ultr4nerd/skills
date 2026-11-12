@@ -15,8 +15,10 @@ tags: [skills, dependencies, harness]
 A second kind of skill is allowed next to the file-managing ones of decision 0001: a **tool guide**.
 A tool guide is Markdown only (`SKILL.md` plus `README.md`, optional `references/`). It teaches an
 agent to drive a third-party CLI that the user installs separately. It ships no CLI of its own, has
-no npm dependencies, never installs, downloads or bundles the tool, and states the tool and the
-version it was written against as a requirement. Tool guides get their own section in the catalog.
+no npm dependencies, never bundles the tool, and states the tool and the version it was written
+against as a requirement. A guide may tell the agent how to install and configure the tool, but
+only through the tool's official channel (package manager or checksum-verified release) and only
+after the user agrees to each step that changes the machine. Tool guides get their own section in the catalog.
 
 ## Why
 
