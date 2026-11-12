@@ -29,6 +29,8 @@ Epics (`kind: epic`) group children via `parent:` and are never picked by `next`
   `retro` later finds the issues worth learning from.
 - Blocked means stop: `backlog block <ID> "<reason>"` and end the turn. Do not work around a
   broken tool, a failing verify you did not cause, or a missing credential.
+- With `branchPattern` set in `backlog.json`, work an issue only on its branch (`start` records and
+  checks it; `check` enforces it).
 - `backlog check` red = fix the tracker state first, then continue.
 
 ## Work loop protocol
@@ -44,7 +46,8 @@ name (for example `claude`); `BACKLOG_OWNER=<me>` makes it the default.
 3. Read the claim output. If it lists `related:` docs, read them before planning: decisions
    constrain what you may do, learnings tell you what already failed here. Then read only the
    docs the issue links. Write a 3-5 bullet plan into `progress/<ID>.md` and
-   `backlog log <ID> "plan: ..."`.
+   `backlog log <ID> "plan: ..."`. Subagents write long output to `progress/<ID>/<topic>.md` and
+   reply with only that path; `done` and `cancel` delete the directory.
 4. Implement in small steps. After each meaningful step: `backlog log <ID> "..."` and run the
    project verify command.
 5. Blocked by something outside the issue: `backlog block <ID> "<reason>"` and stop. If the

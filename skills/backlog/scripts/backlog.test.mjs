@@ -41,6 +41,11 @@ const fm = (id, key) => {
   return m ? m[1].trim() : undefined;
 };
 const progress = (id) => path.join(root, 'progress', `${id}.md`);
+const progressDir = (id) => path.join(root, 'progress', id);
+const writeReport = (id, topic) => {
+  fs.mkdirSync(progressDir(id), { recursive: true });
+  fs.writeFileSync(path.join(progressDir(id), `${topic}.md`), '# report\n');
+};
 const indexFile = () => path.join(root, 'backlog/INDEX.md');
 
 beforeEach(() => {
@@ -513,6 +518,43 @@ describe('board, cancel, help, root discovery', () => {
     assert.ok(!fs.existsSync(progress('ISS-0002')));
   });
 
+  test('cancel removes the progress/<ID>/ directory recursively', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    fs.mkdirSync(path.join(progressDir('ISS-0002'), 'nested'));
+    fs.writeFileSync(path.join(progressDir('ISS-0002'), 'nested', 'x.md'), 'x\n');
+    ok(['cancel', 'ISS-2', 'superseded']);
+    assert.ok(!fs.existsSync(progressDir('ISS-0002')));
+    assert.ok(!fs.existsSync(progress('ISS-0002')));
+  });
+
+  test('done removes the progress/<ID>/ directory and leaves other entries alone', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    writeReport('ISS-0003', 'other');
+    ok(['done', 'ISS-2', '--outcome', 'shipped', '--force']);
+    assert.ok(!fs.existsSync(progressDir('ISS-0002')));
+    assert.ok(!fs.existsSync(progress('ISS-0002')));
+    assert.ok(fs.existsSync(progressDir('ISS-0003')));
+  });
+
+  test('check reports an orphan progress/<ID>/ directory and ignores non-id entries', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    assert.match(ok(['check']).out, /OK/);
+    fs.mkdirSync(path.join(root, 'progress', 'scratch-notes'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'progress', 'not an id'), { recursive: true });
+    assert.match(ok(['check']).out, /OK/);
+    writeReport('ISS-0004', 'review');
+    fails(['check'], 1, /progress\/ISS-0004: orphan progress directory \(ISS-0004 is todo\)/);
+    fs.rmSync(progressDir('ISS-0004'), { recursive: true });
+    writeReport('ISS-0099', 'review');
+    fails(['check'], 1, /progress\/ISS-0099: orphan progress directory \(ISS-0099 does not exist\)/);
+  });
+
   test('help, unknown commands and root discovery from a subdirectory', () => {
     assert.match(ok(['help']).out, /usage: backlog <command>/);
     assert.match(ok(['next', '--help']).out, /usage: backlog next/);
@@ -522,5 +564,120 @@ describe('board, cancel, help, root discovery', () => {
     fs.mkdirSync(sub, { recursive: true });
     assert.match(ok(['list'], { cwd: sub }).out, /ISS-0001/);
     assert.match(ok(['new', 'From sub'], { cwd: sub }).out, /created ISS-0005 backlog\/issues\/ISS-0005-from-sub\.md/);
+  });
+});
+
+describe('branchPattern', () => {
+  const setPattern = (pattern = 'iss-{num}-{slug}') =>
+    fs.writeFileSync(path.join(root, 'backlog.json'), JSON.stringify({ areas: ['core', 'web'], verify: 'npm test', branchPattern: pattern }));
+  const noBranch = { env: { BACKLOG_BRANCH: '' } };
+
+  test('unset: no warnings, no new errors, current branch is not recorded', () => {
+    seed();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana'], { env: { BACKLOG_BRANCH: 'whatever' } });
+    assert.doesNotMatch(r.out + r.err, /branch/i);
+    assert.equal(fm('ISS-0002', 'branch'), '');
+    const c = ok(['check'], { env: { BACKLOG_BRANCH: 'iss-0099-nope' } });
+    assert.doesNotMatch(c.out, /branch/);
+  });
+
+  test('start with --branch records it and does not warn when it matches', () => {
+    seed(); setPattern();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-0002-login-endpoint'], noBranch);
+    assert.equal(fm('ISS-0002', 'branch'), 'iss-0002-login-endpoint');
+    assert.doesNotMatch(r.out + r.err, /warning/);
+  });
+
+  test('start falls back to the current branch (BACKLOG_BRANCH) when a pattern is set', () => {
+    seed(); setPattern();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana'], { env: { BACKLOG_BRANCH: 'iss-0002-login' } });
+    assert.equal(fm('ISS-0002', 'branch'), 'iss-0002-login');
+    assert.doesNotMatch(r.out + r.err, /warning/);
+  });
+
+  test('start with a mismatching branch warns with the expected shape but still starts', () => {
+    seed(); setPattern();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'feat/login'], noBranch);
+    assert.match(r.out + r.err, /warning: branch "feat\/login" does not match branchPattern; expected iss-0002-<slug>/);
+    assert.equal(fm('ISS-0002', 'status'), 'in-progress');
+    assert.equal(fm('ISS-0002', 'branch'), 'feat/login');
+  });
+
+  test('start with a branch for another issue number warns', () => {
+    seed(); setPattern();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-0003-cookie'], noBranch);
+    assert.match(r.out + r.err, /expected iss-0002-<slug>/);
+  });
+
+  test('start with no known branch warns but starts', () => {
+    seed(); setPattern();
+    const r = ok(['start', 'ISS-2', '--owner', 'ana'], noBranch);
+    assert.match(r.out + r.err, /warning: no branch known; expected iss-0002-<slug>/);
+    assert.equal(fm('ISS-0002', 'status'), 'in-progress');
+  });
+
+  test('next --claim applies the same rules', () => {
+    seed(); setPattern();
+    const r = ok(['next', '--claim', '--owner', 'ana', '--branch', 'oops'], noBranch);
+    assert.match(r.out + r.err, /does not match branchPattern; expected iss-0002-<slug>/);
+    assert.equal(fm('ISS-0002', 'branch'), 'oops');
+  });
+
+  test('{id} placeholder and {num} are supported', () => {
+    seed(); setPattern('{id}/{slug}');
+    const r = ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'ISS-0002/login'], noBranch);
+    assert.doesNotMatch(r.out + r.err, /warning/);
+    ok(['check'], noBranch);
+  });
+
+  test('check (a): in-progress with missing, non-matching or wrong-number branch is an error', () => {
+    seed(); setPattern();
+    ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-0002-login'], noBranch);
+    ok(['check'], noBranch);
+    ok(['set', 'ISS-2', 'branch='], noBranch);
+    fails(['check'], 1, /ISS-0002-add-login-endpoint\.md: in-progress without a branch; expected iss-0002-<slug>/, noBranch);
+    ok(['set', 'ISS-2', 'branch=feat/login'], noBranch);
+    fails(['check'], 1, /ISS-0002-add-login-endpoint\.md: branch "feat\/login" does not match branchPattern; expected iss-0002-<slug>/, noBranch);
+    ok(['set', 'ISS-2', 'branch=iss-0003-cookie'], noBranch);
+    fails(['check'], 1, /ISS-0002-add-login-endpoint\.md: branch "iss-0003-cookie" encodes ISS-0003, expected ISS-0002/, noBranch);
+  });
+
+  test('numbers are compared numerically: unpadded branch binds to its issue, other numbers still rejected', () => {
+    seed(); setPattern();
+    ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-2-login'], noBranch);
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-2-login' } });
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-0002-login' } });
+    ok(['set', 'ISS-2', 'branch=iss-3-cookie'], noBranch);
+    fails(['check'], 1, /encodes ISS-0003, expected ISS-0002/, noBranch);
+    fails(['check'], 1, /encodes ISS-0003 which is todo/, { env: { BACKLOG_BRANCH: 'iss-3-cookie' } });
+  });
+
+  test('check (a) ignores issues that are not in-progress', () => {
+    seed(); setPattern();
+    ok(['check'], noBranch);
+  });
+
+  test('check (b): a current branch for a todo issue is an error', () => {
+    seed(); setPattern();
+    fails(['check'], 1, /branch "iss-0003-cookie" encodes ISS-0003 which is todo, expected in-progress, review or blocked/, { env: { BACKLOG_BRANCH: 'iss-0003-cookie' } });
+  });
+
+  test('check (b): a current branch for a missing issue is an error', () => {
+    seed(); setPattern();
+    fails(['check'], 1, /branch "iss-0099-ghost" encodes ISS-0099 which does not exist/, { env: { BACKLOG_BRANCH: 'iss-0099-ghost' } });
+  });
+
+  test('check (b): a current branch for an in-progress issue is accepted; unrelated branches are ignored', () => {
+    seed(); setPattern();
+    ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-0002-login'], noBranch);
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-0002-login' } });
+    ok(['check'], { env: { BACKLOG_BRANCH: 'main' } });
+  });
+
+  test('check (b): git unavailable (not a repo, no BACKLOG_BRANCH) is silently skipped', () => {
+    seed(); setPattern();
+    const r = ok(['check'], { env: { BACKLOG_BRANCH: '', PATH: '/nonexistent' } });
+    assert.doesNotMatch(r.out + r.err, /branch/);
+    ok(['check'], noBranch);
   });
 });

@@ -63,7 +63,8 @@ Optional: set `BACKLOG_OWNER=<name>` in the agent's environment to make it the d
   "areas": [],
   "progressDir": "progress",
   "staleDays": 7,
-  "verify": "pnpm verify"
+  "verify": "pnpm verify",
+  "branchPattern": "iss-{num}-{slug}"
 }
 ```
 
@@ -76,6 +77,12 @@ Optional: set `BACKLOG_OWNER=<name>` in the agent's environment to make it the d
 - `staleDays`: `check` and `stale` warn about in-progress/blocked issues not updated in this many
   days.
 - `verify`: printed as a reminder by `next`, `start` and `done`. The CLI never runs it.
+- `branchPattern` (optional, default unset = off): binds issues to git branches. Placeholders:
+  `{num}` = the issue number zero-padded as in the id (`0012`), `{id}` = the full id (`ISS-0012`),
+  `{slug}` = a lowercase kebab slug (`[a-z0-9-]+`). `"iss-{num}-{slug}"` matches
+  `iss-0012-login-endpoint`. The current branch is `BACKLOG_BRANCH` if set, else
+  `git branch --show-current`; if neither works it is unknown and the rules that need it are
+  skipped silently. With the key unset, none of this applies.
 
 Templates: `templates/issue.md` and `templates/progress.md` in the skill folder. Override per
 project by placing files with the same names in `<dir>/templates/`.
@@ -87,6 +94,7 @@ backlog.json                      config (optional)
 backlog/INDEX.md                  generated overview, grouped by status
 backlog/issues/ISS-0001-slug.md   one file per issue
 progress/ISS-0001.md              scratch plan while ISS-0001 is in progress (deleted on done)
+progress/ISS-0001/<topic>.md      reports written by subagents (reply with only the path); deleted with the plan on done/cancel
 ```
 
 Issue file:
@@ -147,16 +155,16 @@ Exit codes: 0 ok, 1 error, 2 usage error or unknown command, 3 nothing to do (`n
 | `list [--status s,s] [--priority p] [--area a] [--kind k] [--parent ID] [--owner o] [--tag t] [--due-before D] [--sort priority\|created\|updated\|due] [--all] [--json]` | Table of id, pri, status, kind, area, owner, due, title. Done and cancelled are hidden unless `--all` or a status filter is given. |
 | `show <ID> [--brief] [--json]` | Print the file. `--brief`: one-line header, deps with their status, acceptance criteria, last 3 log lines. |
 | `set <ID> key=value ... [--owner o] [--force]` | Validated frontmatter edits. Lists: `depends_on=A,B`, `tags+=x`, `tags-=x`. Always bumps `updated`. See transitions below. |
-| `start <ID> --owner <name> [--branch b]` | `set status=in-progress owner=<name>`, create `progress/<ID>.md` from the template if missing, append a Log line, print the brief and the verify reminder. |
+| `start <ID> --owner <name> [--branch b]` | `set status=in-progress owner=<name>` (and `branch=b` when given), create `progress/<ID>.md` from the template if missing, append a Log line, print the brief and the verify reminder. With `branchPattern` set, the branch is `--branch`, else the current branch; it is recorded in `branch`, and a warning with the expected shape (`expected iss-0012-<slug>`) is printed to stderr when it is unknown or does not match, but the issue still starts. |
 | `log <ID> "<message>" [--owner o]` | Append `- YYYY-MM-DD HH:MM owner: message` to `## Log` (section is created if missing). Bumps `updated`. |
 | `tick <ID> <n\|all> [n...]` | Mark acceptance criteria (1-based) as `[x]`. |
 | `block <ID> "<reason>" [--learning "<title>"]` | `status=blocked`, log `blocked: <reason>`. The owner and progress file are kept so the work can resume. `--learning` files a docmap learning (see below). |
 | `unblock <ID>` | Back to `in-progress` if an owner is set, else `todo`. The usual transition checks apply. |
-| `done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]` | Refuses if any `- [ ]` remains under Acceptance criteria (unless `--force`, which is logged). Outcome comes from `--outcome`, else `## Summary` of the progress file, else an existing non-empty `## Outcome`; refuses if it would be empty. Sets done, clears owner, deletes the progress file, regenerates INDEX, logs `done: <first line of outcome>`, prints the open-children count of the parent epic and a reminder to verify and commit. With docmap installed, prints a hint when the Log shows friction and no learning is linked; `--learning`/`--decision` file one. |
+| `done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]` | Refuses if any `- [ ]` remains under Acceptance criteria (unless `--force`, which is logged). Outcome comes from `--outcome`, else `## Summary` of the progress file, else an existing non-empty `## Outcome`; refuses if it would be empty. Sets done, clears owner, deletes the progress file and the `progress/<ID>/` directory, regenerates INDEX, logs `done: <first line of outcome>`, prints the open-children count of the parent epic and a reminder to verify and commit. With docmap installed, prints a hint when the Log shows friction and no learning is linked; `--learning`/`--decision` file one. |
 | `learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]` | Needs docmap. Runs `docmap new docs/learnings` (or `docs/decisions`) with tags `[<id>, <area>, ...issue tags]`, logs `learning: <path>` on the issue, prints the path and which sections to write. Without `--read-when` the new doc fails `docmap check` until you set it, on purpose. |
 | `retro [--days N] [--json]` | Closed issues (done or cancelled) updated in the last N days (default 14) whose Log shows friction (`blocked`, `unblocked`, `revert`, `retry`/`again`, `workaround`, `flaky`, `--force`, `cancelled`) and that have no `learning:`/`decision:` log line. One row per candidate with its signals. |
-| `cancel <ID> "<reason>"` | `status=cancelled`, log the reason, clear owner, delete the progress file. |
-| `next [--area a] [--owner o] [--claim] [--branch b] [--json]` | Pick the best issue: `todo`, not an epic, all `depends_on` done; ordered by priority, earliest due, oldest created, lowest id. With `--owner`: if that owner already has an in-progress issue, print it as `RESUME` (exit 0); if they have a blocked one, print it as `BLOCKED` with the reason (exit 4). `--claim` runs `start`. Nothing available prints `NOTHING TO DO` (exit 3). With docmap installed the brief ends with `related:` lines (see below); `--json` carries them as `related`. |
+| `cancel <ID> "<reason>"` | `status=cancelled`, log the reason, clear owner, delete the progress file and the `progress/<ID>/` directory. |
+| `next [--area a] [--owner o] [--claim] [--branch b] [--json]` | Pick the best issue: `todo`, not an epic, all `depends_on` done; ordered by priority, earliest due, oldest created, lowest id. With `--owner`: if that owner already has an in-progress issue, print it as `RESUME` (exit 0); if they have a blocked one, print it as `BLOCKED` with the reason (exit 4). `--claim` runs `start` (same `--branch` and `branchPattern` behaviour). Nothing available prints `NOTHING TO DO` (exit 3). With docmap installed the brief ends with `related:` lines (see below); `--json` carries them as `related`. |
 | `board` | Counts per status, in-progress with owner and days since last update, blocked with reasons, overdue, top 5 ready todo. |
 | `stale` | In-progress or blocked issues not updated within `staleDays`. |
 | `index` | Regenerate `backlog/INDEX.md`. Deterministic: same issues, same bytes. |
@@ -178,7 +186,8 @@ Exit codes: 0 ok, 1 error, 2 usage error or unknown command, 3 nothing to do (`n
 Errors (exit 1): missing or unparsable frontmatter, missing required keys, id/filename mismatch,
 duplicate ids, unknown `depends_on` or `parent`, dependency or parent cycles, invalid
 status/priority/kind/area/estimate/date, in-progress without owner, done with an empty Outcome,
-stale or missing INDEX, orphan `progress/*.md` whose issue is not in progress or blocked.
+with `branchPattern` set: an in-progress issue whose `branch` is empty, does not match the pattern or encodes a different number, and a current branch (when known) that matches the pattern but encodes an issue that does not exist or is not in-progress, review or blocked;
+stale or missing INDEX, orphan `progress/*.md` or `progress/<ID>/` directory whose issue is missing or not in progress, blocked or review.
 
 Warnings (exit 0): done with unchecked criteria, todo or in-progress whose parent epic is still `backlog`, in-progress not updated for more than `staleDays`,
 overdue issues, todo (non-epic) with no acceptance criteria.
