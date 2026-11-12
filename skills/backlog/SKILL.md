@@ -33,6 +33,24 @@ Epics (`kind: epic`) group children via `parent:` and are never picked by `next`
   checks it; `check` enforces it).
 - `backlog check` red = fix the tracker state first, then continue.
 
+## Planning a feature
+
+Run this when asked to plan, scope or break down a feature. Planning creates issues, never code.
+
+1. Size it. If the change alters how components fit together (new subsystem, storage, sync,
+   restructuring, an interface others depend on), write a spec first and get it approved:
+   `docmap new docs/specs "<title>" --template spec` (or the project's alias). Plan from the
+   approved spec. Without docmap, a dated Markdown doc linked from the epic's Context.
+2. Ask the clarifying questions first, in one message: at most five, each with lettered options
+   (goal, who it is for, boundaries, what done looks like). Create nothing before the answers.
+3. Create the epic: `backlog new "<title>" --kind epic --area <a> --context "<goal and non-goals>"`.
+4. Split it into children with `--parent <EPIC>`. Each child: describable in three sentences, one
+   area, `--criteria "a|b|c"` that can be checked (never "works correctly"), small enough for one
+   session (`--estimate S|M`). UI work names its manual check among the criteria. Order with
+   `--depends-on` so no child depends on a later one.
+5. `backlog check`, show the user the epic and the child list, and stop. Starting the work is a
+   separate request.
+
 ## Work loop protocol
 
 Run this when asked to "work the backlog", "keep going", or loop until done. `<me>` is your agent
