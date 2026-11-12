@@ -29,6 +29,8 @@ Epics (`kind: epic`) group children via `parent:` and are never picked by `next`
   `retro` later finds the issues worth learning from.
 - Blocked means stop: `backlog block <ID> "<reason>"` and end the turn. Do not work around a
   broken tool, a failing verify you did not cause, or a missing credential.
+- With `branchPattern` set in `backlog.json`, work an issue only on its branch (`start` records and
+  checks it; `check` enforces it).
 - `backlog check` red = fix the tracker state first, then continue.
 
 ## Work loop protocol
