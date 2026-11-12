@@ -41,6 +41,11 @@ const fm = (id, key) => {
   return m ? m[1].trim() : undefined;
 };
 const progress = (id) => path.join(root, 'progress', `${id}.md`);
+const progressDir = (id) => path.join(root, 'progress', id);
+const writeReport = (id, topic) => {
+  fs.mkdirSync(progressDir(id), { recursive: true });
+  fs.writeFileSync(path.join(progressDir(id), `${topic}.md`), '# report\n');
+};
 const indexFile = () => path.join(root, 'backlog/INDEX.md');
 
 beforeEach(() => {
@@ -511,6 +516,43 @@ describe('board, cancel, help, root discovery', () => {
     assert.equal(fm('ISS-0002', 'owner'), '');
     assert.match(readIssue('ISS-0002'), /ana: cancelled: superseded/);
     assert.ok(!fs.existsSync(progress('ISS-0002')));
+  });
+
+  test('cancel removes the progress/<ID>/ directory recursively', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    fs.mkdirSync(path.join(progressDir('ISS-0002'), 'nested'));
+    fs.writeFileSync(path.join(progressDir('ISS-0002'), 'nested', 'x.md'), 'x\n');
+    ok(['cancel', 'ISS-2', 'superseded']);
+    assert.ok(!fs.existsSync(progressDir('ISS-0002')));
+    assert.ok(!fs.existsSync(progress('ISS-0002')));
+  });
+
+  test('done removes the progress/<ID>/ directory and leaves other entries alone', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    writeReport('ISS-0003', 'other');
+    ok(['done', 'ISS-2', '--outcome', 'shipped', '--force']);
+    assert.ok(!fs.existsSync(progressDir('ISS-0002')));
+    assert.ok(!fs.existsSync(progress('ISS-0002')));
+    assert.ok(fs.existsSync(progressDir('ISS-0003')));
+  });
+
+  test('check reports an orphan progress/<ID>/ directory and ignores non-id entries', () => {
+    seed();
+    ok(['start', 'ISS-2', '--owner', 'ana']);
+    writeReport('ISS-0002', 'review');
+    assert.match(ok(['check']).out, /OK/);
+    fs.mkdirSync(path.join(root, 'progress', 'scratch-notes'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'progress', 'not an id'), { recursive: true });
+    assert.match(ok(['check']).out, /OK/);
+    writeReport('ISS-0004', 'review');
+    fails(['check'], 1, /progress\/ISS-0004: orphan progress directory \(ISS-0004 is todo\)/);
+    fs.rmSync(progressDir('ISS-0004'), { recursive: true });
+    writeReport('ISS-0099', 'review');
+    fails(['check'], 1, /progress\/ISS-0099: orphan progress directory \(ISS-0099 does not exist\)/);
   });
 
   test('help, unknown commands and root discovery from a subdirectory', () => {
