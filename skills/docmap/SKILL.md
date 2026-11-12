@@ -10,7 +10,7 @@ directory has a generated `INDEX.md`: what is here, when to open it. Drill down 
 indexes, then extract only the section you need. Budget: ~100 tokens per hop, not thousands.
 
 CLI (zero deps, Node >= 20): `node .claude/skills/docmap/scripts/docmap.mjs <cmd>`, or the
-project's alias (`npm run docs -- <cmd>`, `docmap <cmd>`). `docmap <cmd> --help` has every flag;
+project's alias (`npm run docmap -- <cmd>`, `docmap <cmd>`). `docmap <cmd> --help` has every flag;
 `README.md` next to this file has the full reference, config and frontmatter schema.
 
 ## Reading protocol

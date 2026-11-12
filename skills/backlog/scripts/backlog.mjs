@@ -10,7 +10,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 const DEFAULT_CONFIG = {
   dir: 'backlog',
@@ -1218,8 +1218,9 @@ function collectChecks(ctx) {
       const target = store.byId.get(id);
       const where = target ? target.rel : ctx.rel(ctx.issuesDir);
       if (!target) errors.push(`${where}: current branch "${branch}" encodes ${id} which does not exist`);
-      else if (!['in-progress', 'review', 'blocked'].includes(target.fm.status)) {
-        errors.push(`${where}: current branch "${branch}" encodes ${id} which is ${target.fm.status}, expected in-progress, review or blocked`);
+      // done/cancelled are accepted: the closing commit runs on the issue's own branch.
+      else if (['todo', 'backlog'].includes(target.fm.status)) {
+        errors.push(`${where}: current branch "${branch}" encodes ${id} which is ${target.fm.status}, expected an issue that has been started`);
       }
     }
   }

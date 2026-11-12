@@ -659,7 +659,18 @@ describe('branchPattern', () => {
 
   test('check (b): a current branch for a todo issue is an error', () => {
     seed(); setPattern();
-    fails(['check'], 1, /branch "iss-0003-cookie" encodes ISS-0003 which is todo, expected in-progress, review or blocked/, { env: { BACKLOG_BRANCH: 'iss-0003-cookie' } });
+    fails(['check'], 1, /branch "iss-0003-cookie" encodes ISS-0003 which is todo, expected an issue that has been started/, { env: { BACKLOG_BRANCH: 'iss-0003-cookie' } });
+  });
+
+  test('check (b): a current branch whose issue is done or cancelled is accepted (closing on the branch)', () => {
+    seed(); setPattern();
+    const env = { env: { BACKLOG_BRANCH: 'iss-0002-login' } };
+    ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-0002-login'], noBranch);
+    ok(['done', 'ISS-2', '--outcome', 'shipped', '--force'], noBranch);
+    ok(['check'], env);
+    ok(['start', 'ISS-3', '--owner', 'ana', '--branch', 'iss-0003-cookie'], noBranch);
+    ok(['cancel', 'ISS-3', 'not needed'], noBranch);
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-0003-cookie' } });
   });
 
   test('check (b): a current branch for a missing issue is an error', () => {
