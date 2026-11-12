@@ -354,6 +354,13 @@ function progressFile(ctx, id) {
   return path.join(ctx.progressDir, `${id}.md`);
 }
 
+// progress/<ID>/ holds reports written by subagents; removed together with the plan file.
+function removeProgress(ctx, id) {
+  const pf = progressFile(ctx, id);
+  if (fs.existsSync(pf)) fs.unlinkSync(pf);
+  fs.rmSync(path.join(ctx.progressDir, id), { recursive: true, force: true });
+}
+
 function readTemplate(ctx, name) {
   const candidates = [path.join(ctx.dir, 'templates', name), path.join(SKILL_DIR, 'templates', name)];
   const found = candidates.find((f) => fs.existsSync(f));
@@ -910,8 +917,7 @@ function cmdDone(ctx, args) {
   const firstLine = outcome.split('\n')[0].trim();
   appendLog(issue, owner, `done: ${firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine}`);
   applyChanges(ctx, store, issue, [{ key: 'status', op: '=', value: 'done' }, { key: 'owner', op: '=', value: '' }], { force: true });
-  const pf = progressFile(ctx, issue.fm.id);
-  if (fs.existsSync(pf)) fs.unlinkSync(pf);
+  removeProgress(ctx, issue.fm.id);
   const fresh = loadIssues(ctx);
   writeIndex(ctx, fresh);
   console.log(`${issue.fm.id} done: ${issue.fm.title}`);
@@ -969,8 +975,7 @@ function cmdCancel(ctx, args) {
   if (CLOSED.includes(issue.fm.status)) throw new UserError(`${issue.fm.id} is already ${issue.fm.status}`);
   appendLog(issue, args.owner || issue.fm.owner || defaultOwner(), `cancelled: ${reason}`);
   applyChanges(ctx, store, issue, [{ key: 'status', op: '=', value: 'cancelled' }, { key: 'owner', op: '=', value: '' }]);
-  const pf = progressFile(ctx, issue.fm.id);
-  if (fs.existsSync(pf)) fs.unlinkSync(pf);
+  removeProgress(ctx, issue.fm.id);
   writeIndex(ctx, loadIssues(ctx));
   console.log(`${issue.fm.id} cancelled: ${reason}`);
 }
@@ -1136,11 +1141,18 @@ function collectChecks(ctx) {
   }
   if (indexIsStale(ctx, store)) errors.push(`${ctx.rel(ctx.indexFile)}: stale or missing; run "backlog index"`);
   if (fs.existsSync(ctx.progressDir)) {
+    const live = (issue) => issue && ['in-progress', 'blocked', 'review'].includes(issue.fm.status);
     for (const f of fs.readdirSync(ctx.progressDir).filter((f) => f.endsWith('.md')).sort()) {
       const id = f.slice(0, -3);
       const issue = store.byId.get(id);
-      if (!issue || !['in-progress', 'blocked', 'review'].includes(issue.fm.status)) {
+      if (!live(issue)) {
         errors.push(`${ctx.rel(path.join(ctx.progressDir, f))}: orphan progress file (${issue ? `${id} is ${issue.fm.status}` : `${id} does not exist`})`);
+      }
+    }
+    for (const e of fs.readdirSync(ctx.progressDir, { withFileTypes: true }).filter((e) => e.isDirectory() && /^[A-Za-z]+-\d+$/.test(e.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+      const issue = store.byId.get(e.name);
+      if (!live(issue)) {
+        errors.push(`${ctx.rel(path.join(ctx.progressDir, e.name))}: orphan progress directory (${issue ? `${e.name} is ${issue.fm.status}` : `${e.name} does not exist`})`);
       }
     }
   }
