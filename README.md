@@ -18,6 +18,15 @@ and the project keeps its own memory of what was decided and what went wrong.
 | [`backlog`](skills/backlog/) | File-based issue tracker for agents ("Linear in a folder"). Markdown issues with priority, status, dependencies and a log; a CLI with `next --claim`, `start`, `log`, `block`, `done`, `board`, `check`, `retro`. Built for long autonomous loops. With docmap installed it surfaces related decisions and learnings at claim time and files new ones at close time. | Planning work, "what's next", creating/closing issues, status reports, autonomous runs, retros |
 | [`design`](skills/design/) | Design system in files. W3C DTCG tokens are the single source; `build` generates CSS (optionally a Tailwind v4 `@theme`), a typed TS export and a one-line-per-token `TOKENS.md`; a 150-line `DESIGN.md` is the agent entry point, with component specs, surface targets (wallet pass, email, print, OG) and reference intake notes. `check` covers references, WCAG contrast per theme, stale outputs and hard-coded values in source. | Building or changing UI, email, print, passes or OG images; turning a brand book, screenshots or CSS into tokens; adding colors, fonts or components |
 
+### Tool guides
+
+Markdown-only skills that teach an agent to drive a CLI you install separately (decision 0003).
+They ship no code and never install the tool.
+
+| Skill | What it does | When it triggers |
+|---|---|---|
+| [`whatsapp`](skills/whatsapp/) | Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Requires `wacli` 0.26+ paired with your phone. | Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli |
+
 More categories (content creation, setup) are coming; each will have its own section here.
 
 ## Install
@@ -47,7 +56,7 @@ shell aliases work too):
 Name the docmap script `docmap`, not `docs`: `npm docs` and `pnpm docs` are package-manager
 built-ins that exit 0 without running the script, so a `docs check` there is a false green.
 
-Requirements: Node >= 20. No npm dependencies.
+Requirements: Node >= 20. No npm dependencies. Tool guides need their tool installed (`whatsapp`: `wacli`).
 
 ## The harness pattern (software projects)
 

@@ -4,7 +4,7 @@ description: A skill is Markdown plus a Node CLI with no npm dependencies; nothi
 read_when: Adding a dependency, a build step or runtime-specific code (CI, Vercel, a local path) to a skill, or wrapping a third-party tool inside one
 id: decisions-0001
 status: current
-updated: 2026-10-30
+updated: 2026-11-11
 tags: [skills, dependencies, harness]
 ---
 
@@ -31,3 +31,5 @@ machine. A skill may generate files for a third-party tool; it never imports or 
   to a script in the target project.
 - An unsupervised runner was drafted and dropped (2026-10-30): no repo-level runner exists; if one
   is added later it is a separate decision and must not change the skills.
+- Markdown-only skills that teach an agent to drive an external CLI are allowed as "tool guides"
+  (decision 0003, 2026-11-11); everything above still applies to skills that ship a CLI.
