@@ -1,9 +1,11 @@
 # whatsapp
 
-A tool guide (decision 0003) that lets a coding agent read, search and send WhatsApp messages from
-your own account through [`wacli`](https://github.com/openclaw/wacli). The skill is Markdown only:
-it ships no CLI and never installs anything. You install and pair `wacli`; the skill teaches the
-agent the safe way to use it.
+A tool guide (decision 0003) that lets a coding agent set up, read, search and send WhatsApp
+messages from your own account through [`wacli`](https://github.com/openclaw/wacli). The skill is
+Markdown only and ships no CLI. When you ask, the agent installs wacli from its official channel,
+pairs it with your phone and installs the sync service, asking before each step
+([`references/setup.md`](references/setup.md)); the only manual step is typing the pairing code
+on your phone.
 
 Why wacli: WhatsApp Web needs a session that stays open. wacli already runs one
 (`wacli sync --follow`), keeps a local SQLite mirror with full-text search, gives JSON output for
@@ -27,6 +29,9 @@ Checked against **wacli 0.26.0** (2026-11-05).
   `wacli` without `--read-only` (or `WACLI_READONLY=1` in its environment) unless you mean it.
 
 ## Install
+
+Install the skill and ask your agent to "set up WhatsApp"; it follows `references/setup.md`.
+The same steps by hand:
 
 1. Install wacli (single binary):
 

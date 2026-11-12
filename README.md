@@ -25,7 +25,7 @@ They ship no code and never install the tool.
 
 | Skill | What it does | When it triggers |
 |---|---|---|
-| [`whatsapp`](skills/whatsapp/) | Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Requires `wacli` 0.26+ paired with your phone. | Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli |
+| [`whatsapp`](skills/whatsapp/) | Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Can also set it up: installs `wacli` 0.26+, pairs it by phone code (you type the code on your phone) and installs the sync service, asking before each step. | Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli |
 
 More categories (content creation, setup) are coming; each will have its own section here.
 
