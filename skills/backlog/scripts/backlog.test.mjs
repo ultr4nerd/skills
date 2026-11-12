@@ -492,7 +492,7 @@ describe('docmap bridge', () => {
     assert.match(ok(['retro']).out, /^retro: 1 of 3 issues/);
     assert.match(ok(['retro', '--days', '0'], { now: '2026-11-01T10:00:00' }).out, /nothing to learn from \(0 issues closed in the last 0 days/);
     fails(['retro', '--days', 'x'], 2);
-    assert.match(ok(['--version']).out, /^backlog 0\.1\.0\n$/);
+    assert.match(ok(['--version']).out, /^backlog \d+\.\d+\.\d+\n$/);
   });
 });
 

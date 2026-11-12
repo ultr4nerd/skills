@@ -10,7 +10,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 const DEFAULT_CONFIG = {
   dir: 'backlog',

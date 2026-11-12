@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const CONFIG_FILE = 'docmap.json';
 const STATUSES = ['draft', 'current', 'deprecated', 'superseded'];
 const REQUIRED_KEYS = ['title', 'description', 'read_when'];
