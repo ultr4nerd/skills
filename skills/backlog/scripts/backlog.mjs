@@ -141,8 +141,8 @@ function branchProblem(ctx, id, branch) {
   if (!branch) return `in-progress without a branch; expected ${expected}`;
   const nums = parseBranch(ctx, branch);
   if (!nums) return `branch "${branch}" does not match branchPattern; expected ${expected}`;
-  const wrong = nums.find((n) => n !== numOf(id));
-  if (wrong !== undefined) return `branch "${branch}" encodes ${ctx.cfg.prefix}-${wrong}, expected ${id}`;
+  const wrong = nums.find((n) => Number(n) !== Number(numOf(id)));
+  if (wrong !== undefined) return `branch "${branch}" encodes ${normalizeId(ctx, wrong)}, expected ${id}`;
   return null;
 }
 
@@ -151,7 +151,7 @@ function currentBranch(ctx) {
   const env = process.env.BACKLOG_BRANCH;
   if (env && env.trim()) return env.trim();
   try {
-    const res = spawnSync('git', ['branch', '--show-current'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const res = spawnSync('git', ['branch', '--show-current'], { cwd: ctx.root, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
     if (res.error || res.status !== 0) return '';
     return (res.stdout || '').trim();
   } catch {
@@ -891,7 +891,7 @@ function startIssue(ctx, store, issue, owner, branchArg, force) {
   if (bound) {
     const expected = expectedBranch(ctx, issue.fm.id);
     if (!branch) console.error(`warning: no branch known; expected ${expected}`);
-    else if (!parseBranch(ctx, branch) || branchProblem(ctx, issue.fm.id, branch)) {
+    else if (branchProblem(ctx, issue.fm.id, branch)) {
       console.error(`warning: branch "${branch}" does not match branchPattern; expected ${expected}`);
     }
   }
@@ -1214,7 +1214,7 @@ function collectChecks(ctx) {
     const branch = currentBranch(ctx);
     const nums = branch ? parseBranch(ctx, branch) : null;
     if (nums && nums.length) {
-      const id = `${cfg.prefix}-${nums[0]}`;
+      const id = normalizeId(ctx, nums[0]);
       const target = store.byId.get(id);
       const where = target ? target.rel : ctx.rel(ctx.issuesDir);
       if (!target) errors.push(`${where}: current branch "${branch}" encodes ${id} which does not exist`);

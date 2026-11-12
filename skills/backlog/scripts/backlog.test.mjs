@@ -642,6 +642,16 @@ describe('branchPattern', () => {
     fails(['check'], 1, /ISS-0002-add-login-endpoint\.md: branch "iss-0003-cookie" encodes ISS-0003, expected ISS-0002/, noBranch);
   });
 
+  test('numbers are compared numerically: unpadded branch binds to its issue, other numbers still rejected', () => {
+    seed(); setPattern();
+    ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'iss-2-login'], noBranch);
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-2-login' } });
+    ok(['check'], { env: { BACKLOG_BRANCH: 'iss-0002-login' } });
+    ok(['set', 'ISS-2', 'branch=iss-3-cookie'], noBranch);
+    fails(['check'], 1, /encodes ISS-0003, expected ISS-0002/, noBranch);
+    fails(['check'], 1, /encodes ISS-0003 which is todo/, { env: { BACKLOG_BRANCH: 'iss-3-cookie' } });
+  });
+
   test('check (a) ignores issues that are not in-progress', () => {
     seed(); setPattern();
     ok(['check'], noBranch);
