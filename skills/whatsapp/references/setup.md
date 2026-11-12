@@ -37,22 +37,46 @@ pair each with `wacli accounts add NAME` instead (same flow, add `--account NAME
 Use the phone-number code, not the QR: the user cannot reliably see a QR printed in your terminal.
 
 1. Ask for the WhatsApp number in international format (`+52 55 1234 5678`) and how much history
-   to import (default: what the phone sends, about three months; `--history-days N` for less).
-2. Start pairing in the background and capture stderr:
+   to import (default: what the phone sends, about three months; `--history-days N` for less). The
+   phone decides what it sends and may send more than asked; say so.
+2. Start pairing as a **background command** (one the harness tracks and reports when it exits),
+   capturing stderr to a file whose absolute path you note for later calls:
    ```sh
-   log=$(mktemp -t wacli-auth)
-   wacli --events auth --phone '+525512345678' 2> "$log"
+   wacli --events auth --phone '+525512345678' 2> /abs/path/wacli-auth.ndjson
    ```
-   Run it as a background command (it keeps running while the phone confirms and while the first
-   history sync arrives).
-3. Read the code from the NDJSON on stderr: the line `{"event":"pair_code","data":{"phone":"...","code":"ABCD-EFGH"},...}`.
-   Without `--events` the same code is printed as `Pairing code for +<phone>: <code>`.
-4. Give the user the code and these steps: WhatsApp on the phone → **Settings → Linked devices →
-   Link a device → Link with phone number instead**, then type the code. Codes expire in a few
-   minutes; if it expires, stop the command and start again for a new one.
-5. Wait for the command to finish (it exits after `--idle-exit`, 30 s by default, once the first
-   sync goes quiet). Then confirm: `wacli --read-only --json auth status` shows
-   `authenticated: true` and the linked `phone`. Delete `$log`: it has the code.
+   It keeps running while the user enters the code and while the first history sync arrives.
+3. Wait a few seconds for the code (bounded loop, not a monitor), then read it:
+   ```sh
+   f=/abs/path/wacli-auth.ndjson
+   for i in $(seq 1 60); do grep -qE '"event":"(pair_code|error)"' "$f" && break; sleep 1; done
+   grep -E '"event":"(pair_code|error)"' "$f"
+   ```
+   The line is `{"event":"pair_code","data":{"phone":"...","code":"ABCD-EFGH"},"ts":<unix ms>}`.
+   An `error` event instead (invalid number, passkey required) ends the flow: report it.
+4. **Show the code as the last thing in your turn, then end the turn.** Some harnesses only surface
+   the final message of a turn, so text written before another tool call can be invisible. The
+   final message carries, in this order:
+   - the code, large and on its own line;
+   - the deadline: `ts` + 160 s as a local clock time, and "about 2 and a half minutes";
+   - the phone steps: WhatsApp → **Settings → Linked devices → Link a device → Link with phone
+     number instead** (below the QR camera), then type the code.
+
+   Do not start monitors, polls or any other tool call after showing it in that turn.
+   Why 160 s: wacli asks for the code on WhatsApp's first QR ref, and the QR channel holds 6 refs
+   (60 s, then 5 × 20 s). When they run out, wacli exits with `QR code timed out`. The window is
+   WhatsApp's, so treat it as approximate.
+5. **Outcome.** The background command exiting is the signal (the harness notifies you), or the
+   user's next reply, whichever comes first:
+   - `wacli --read-only --json auth status` shows `authenticated: true` and the linked `phone`:
+     paired. The command exits by itself after `--idle-exit` (30 s by default) once the first
+     history sync goes quiet; let it finish so the history is stored.
+   - It exited with `QR code timed out` (or an `error` event) and `authenticated` is false: the code
+     expired. Tell the user and offer a new one; on a yes, start again from step 2. Never start a
+     new pairing while the old command still runs.
+   - The user says they typed it but `authenticated` is still false and the command still runs: the
+     phone may still be confirming; check again in a few seconds before calling it failed.
+
+   Delete the capture file afterwards: it holds the code.
 
 If WhatsApp asks for a passkey, wacli stops with an error: tell the user, there is no workaround.
 

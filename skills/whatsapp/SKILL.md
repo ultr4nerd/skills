@@ -37,7 +37,8 @@ wacli --read-only --json doctor          # lock_held false: sync not running, se
 Any check failing, or the user asking to set up WhatsApp: offer to do it and follow
 `references/setup.md`. It installs wacli from the official channel (checksum-verified), pairs by
 phone-number code (you start `wacli --events auth --phone +<number>` in the background, read the
-`pair_code` event and the user types the code on the phone, so no QR is needed), installs
+`pair_code` event and the user types the code on the phone, so no QR is needed; the code lasts
+about 160 s and must be the last thing in your turn, with its deadline), installs
 `sync --follow` as a launchd or systemd user service, and verifies. Ask before each step that
 changes the machine; the code entry on the phone is the only part the user must do.
 
