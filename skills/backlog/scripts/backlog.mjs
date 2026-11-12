@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   progressDir: 'progress',
   staleDays: 7,
   verify: 'pnpm verify',
+  branchPattern: '',
 };
 
 const KNOWN_KEYS = ['id', 'title', 'kind', 'status', 'priority', 'area', 'parent', 'depends_on',
@@ -98,7 +99,64 @@ function loadConfig(root) {
   for (const s of ['todo', 'in-progress', 'blocked', 'done', 'cancelled']) {
     if (!cfg.statuses.includes(s)) throw new UserError(`backlog.json: "statuses" must include "${s}"`);
   }
+  if (cfg.branchPattern !== undefined && cfg.branchPattern !== null && typeof cfg.branchPattern !== 'string') {
+    throw new UserError('backlog.json: "branchPattern" must be a string');
+  }
+  cfg.branchPattern = cfg.branchPattern || '';
   return cfg;
+}
+
+// ---------------------------------------------------------------------------
+// Branch binding (opt-in via the "branchPattern" config key). Placeholders: {num} = issue number
+// zero-padded as in the id, {id} = full id, {slug} = [a-z0-9-]+.
+
+
+// Regex for the pattern. Number-bearing placeholders are capture groups (in order of appearance).
+function branchRegex(ctx) {
+  const parts = ctx.cfg.branchPattern.split(/(\{num\}|\{id\}|\{slug\})/);
+  const body = parts.map((p) => {
+    if (p === '{num}') return '(\\d+)';
+    if (p === '{id}') return `${escapeRe(ctx.cfg.prefix)}-(\\d+)`;
+    if (p === '{slug}') return '[a-z0-9-]+';
+    return escapeRe(p);
+  }).join('');
+  return new RegExp(`^${body}$`);
+}
+
+// null when the branch does not fit the pattern; otherwise the numbers it encodes (maybe none).
+function parseBranch(ctx, branch) {
+  const m = branchRegex(ctx).exec(branch);
+  return m ? m.slice(1) : null;
+}
+
+const numOf = (id) => id.slice(id.lastIndexOf('-') + 1);
+
+function expectedBranch(ctx, id) {
+  return ctx.cfg.branchPattern.replaceAll('{num}', numOf(id)).replaceAll('{id}', id).replaceAll('{slug}', '<slug>');
+}
+
+// Why the branch is wrong for this issue, or null when it is fine.
+function branchProblem(ctx, id, branch) {
+  const expected = expectedBranch(ctx, id);
+  if (!branch) return `in-progress without a branch; expected ${expected}`;
+  const nums = parseBranch(ctx, branch);
+  if (!nums) return `branch "${branch}" does not match branchPattern; expected ${expected}`;
+  const wrong = nums.find((n) => Number(n) !== Number(numOf(id)));
+  if (wrong !== undefined) return `branch "${branch}" encodes ${normalizeId(ctx, wrong)}, expected ${id}`;
+  return null;
+}
+
+// Current branch, or '' when unknown. Never throws.
+function currentBranch(ctx) {
+  const env = process.env.BACKLOG_BRANCH;
+  if (env && env.trim()) return env.trim();
+  try {
+    const res = spawnSync('git', ['branch', '--show-current'], { cwd: ctx.root, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (res.error || res.status !== 0) return '';
+    return (res.stdout || '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function makeContext(cwd) {
@@ -827,7 +885,16 @@ function cmdSet(ctx, args) {
   console.log(`${issue.fm.id} updated: ${changes.map((c) => `${c.key}${c.op}${Array.isArray(issue.fm[c.key]) ? issue.fm[c.key].join(',') : issue.fm[c.key]}`).join(' ')}`);
 }
 
-function startIssue(ctx, store, issue, owner, branch, force) {
+function startIssue(ctx, store, issue, owner, branchArg, force) {
+  const bound = Boolean(ctx.cfg.branchPattern);
+  const branch = branchArg || (bound ? currentBranch(ctx) : '');
+  if (bound) {
+    const expected = expectedBranch(ctx, issue.fm.id);
+    if (!branch) console.error(`warning: no branch known; expected ${expected}`);
+    else if (branchProblem(ctx, issue.fm.id, branch)) {
+      console.error(`warning: branch "${branch}" does not match branchPattern; expected ${expected}`);
+    }
+  }
   const changes = [{ key: 'status', op: '=', value: 'in-progress' }, { key: 'owner', op: '=', value: owner }];
   if (branch) changes.push({ key: 'branch', op: '=', value: branch });
   applyChanges(ctx, store, issue, changes, { force });
@@ -1124,6 +1191,10 @@ function collectChecks(ctx) {
       if (cycle && cycle[0] === fm.id) err(issue, `${key} cycle: ${cycle.join(' -> ')}`);
     }
     if (fm.status === 'in-progress' && !fm.owner) err(issue, 'in-progress without owner');
+    if (cfg.branchPattern && fm.status === 'in-progress') {
+      const problem = branchProblem(ctx, fm.id, fm.branch);
+      if (problem) err(issue, problem);
+    }
     const { all, unchecked } = criteriaOf(issue.body);
     if (fm.status === 'done') {
       if (!stripComments(getSection(issue.body, 'Outcome'))) err(issue, 'done without a non-empty "## Outcome"');
@@ -1137,6 +1208,19 @@ function collectChecks(ctx) {
     if (['todo', 'in-progress'].includes(fm.status) && fm.parent) {
       const parent = store.byId.get(fm.parent);
       if (parent && parent.fm.status === 'backlog') warn(issue, `is ${fm.status} but parent ${fm.parent} is still backlog`);
+    }
+  }
+  if (cfg.branchPattern) {
+    const branch = currentBranch(ctx);
+    const nums = branch ? parseBranch(ctx, branch) : null;
+    if (nums && nums.length) {
+      const id = normalizeId(ctx, nums[0]);
+      const target = store.byId.get(id);
+      const where = target ? target.rel : ctx.rel(ctx.issuesDir);
+      if (!target) errors.push(`${where}: current branch "${branch}" encodes ${id} which does not exist`);
+      else if (!['in-progress', 'review', 'blocked'].includes(target.fm.status)) {
+        errors.push(`${where}: current branch "${branch}" encodes ${id} which is ${target.fm.status}, expected in-progress, review or blocked`);
+      }
     }
   }
   if (indexIsStale(ctx, store)) errors.push(`${ctx.rel(ctx.indexFile)}: stale or missing; run "backlog index"`);
