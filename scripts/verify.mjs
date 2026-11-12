@@ -22,7 +22,21 @@ for (const name of skills) {
   const text = fs.readFileSync(skillFile, 'utf8');
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
   if (!fm) { problems.push(`${name}: SKILL.md has no frontmatter`); continue; }
-  const field = (k) => (new RegExp(`^${k}:\\s*(.+)$`, 'm').exec(fm[1]) || [])[1]?.trim();
+  // Frontmatter must parse as YAML for installers (npx skills uses a strict parser): a plain
+  // (unquoted) scalar may not contain ': ' or ' #'. Quote such values.
+  for (const line of fm[1].split('\n')) {
+    const m = /^([A-Za-z_][\w-]*):\s+(.+)$/.exec(line);
+    if (!m) continue;
+    const v = m[2].trim();
+    if (/^["'[{>|]/.test(v)) continue;
+    if (v.includes(': ') || v.includes(' #')) problems.push(`${name}: SKILL.md "${m[1]}" is an unquoted YAML value containing ': ' or ' #'; wrap it in double quotes`);
+  }
+  const unquote = (v) => {
+    if (v?.startsWith('"') && v.endsWith('"')) { try { return JSON.parse(v); } catch { return v; } }
+    if (v?.startsWith("'") && v.endsWith("'")) return v.slice(1, -1).replace(/''/g, "'");
+    return v;
+  };
+  const field = (k) => unquote((new RegExp(`^${k}:\\s*(.+)$`, 'm').exec(fm[1]) || [])[1]?.trim());
   if (field('name') !== name) problems.push(`${name}: SKILL.md name is "${field('name')}", expected "${name}"`);
   const desc = field('description') || '';
   if (desc.length < 40 || desc.length > 1024) problems.push(`${name}: description must be 40..1024 chars (is ${desc.length})`);
