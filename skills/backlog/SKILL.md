@@ -1,6 +1,6 @@
 ---
 name: backlog
-description: File-based issue tracker driven by a zero-dependency CLI (Markdown issues with frontmatter in backlog/, generated INDEX.md). Use in any project that has backlog/ or backlog.json: when planning work, asked "what's next", creating, updating or closing issues, tracking progress, running autonomous work loops ("work the backlog", "keep going"), producing status reports, or doing a retro of what went wrong.
+description: "File-based issue tracker driven by a zero-dependency CLI (Markdown issues with frontmatter in backlog/, generated INDEX.md). Use in any project that has backlog/ or backlog.json: when planning work, asked \"what's next\", creating, updating or closing issues, tracking progress, running autonomous work loops (\"work the backlog\", \"keep going\"), producing status reports, or doing a retro of what went wrong."
 ---
 
 # backlog

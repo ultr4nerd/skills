@@ -1,6 +1,6 @@
 ---
 name: docmap
-description: Navigate, search and extend a project's Markdown docs (decisions, learnings, specs) without reading whole files. Use in any project that has docs/INDEX.md or docmap.json: when asked "where is X documented", when reading or searching project docs, when adding a doc, recording a decision or a learning, and before opening any doc under docs/ longer than ~150 lines. Also use to set up docs/ in a new project ("docmap init").
+description: "Navigate, search and extend a project's Markdown docs (decisions, learnings, specs) without reading whole files. Use in any project that has docs/INDEX.md or docmap.json: when asked \"where is X documented\", when reading or searching project docs, when adding a doc, recording a decision or a learning, and before opening any doc under docs/ longer than ~150 lines. Also use to set up docs/ in a new project (\"docmap init\")."
 ---
 
 # docmap
