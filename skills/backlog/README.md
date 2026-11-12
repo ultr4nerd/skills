@@ -11,6 +11,10 @@ It is built for long autonomous runs ("Ralph loop" style): an agent repeatedly a
 and loops until the backlog is empty or it is blocked. Deterministic exit codes let the loop stop
 cleanly. Humans read the same files and the same INDEX in any editor or on GitHub.
 
+Planning is part of the workflow: `SKILL.md` ("Planning a feature") tells an agent how to turn an
+idea into an epic with session-sized children: spec first for architectural changes, clarifying
+questions in one message, then `new --kind epic` and `new --parent` with `--depends-on` ordering.
+
 Why files and not a SaaS tracker:
 
 - The backlog travels with the code: branches, PRs and history include it.
