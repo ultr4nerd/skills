@@ -26,8 +26,9 @@ Pick one so `docmap <cmd>` is cheap to type and to put in instructions:
 
 ```jsonc
 // package.json
-{ "scripts": { "docs": "node .claude/skills/docmap/scripts/docmap.mjs" } }
-// then: npm run docs -- find refunds
+{ "scripts": { "docmap": "node .claude/skills/docmap/scripts/docmap.mjs" } }
+// then: npm run docmap -- find refunds
+// not "docs": `npm docs` / `pnpm docs` are built-ins that exit 0 without running the script
 ```
 
 ```sh

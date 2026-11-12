@@ -190,7 +190,7 @@ Exit codes: 0 ok, 1 error, 2 usage error or unknown command, 3 nothing to do (`n
 Errors (exit 1): missing or unparsable frontmatter, missing required keys, id/filename mismatch,
 duplicate ids, unknown `depends_on` or `parent`, dependency or parent cycles, invalid
 status/priority/kind/area/estimate/date, in-progress without owner, done with an empty Outcome,
-with `branchPattern` set: an in-progress issue whose `branch` is empty, does not match the pattern or encodes a different number, and a current branch (when known) that matches the pattern but encodes an issue that does not exist or is not in-progress, review or blocked;
+with `branchPattern` set: an in-progress issue whose `branch` is empty, does not match the pattern or encodes a different number, and a current branch (when known) that matches the pattern but encodes an issue that does not exist or is still `todo` or `backlog` (`done` and `cancelled` are accepted, so an issue can be closed on its own branch);
 stale or missing INDEX, orphan `progress/*.md` or `progress/<ID>/` directory whose issue is missing or not in progress, blocked or review.
 
 Warnings (exit 0): done with unchecked criteria, todo or in-progress whose parent epic is still `backlog`, in-progress not updated for more than `staleDays`,

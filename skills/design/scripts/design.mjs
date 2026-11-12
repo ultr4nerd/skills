@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const CONFIG_FILE = 'design.json';
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = 'io.github.ultr4nerd.design'; // our $extensions key (reverse domain, per the spec)

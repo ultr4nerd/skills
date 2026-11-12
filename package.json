@@ -1,6 +1,6 @@
 {
   "name": "@ultr4nerd/skills",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Agent skills for running projects with coding agents. Zero-dependency CLIs.",
   "type": "module",
@@ -10,7 +10,7 @@
   "scripts": {
     "test": "node --test skills/*/scripts/*.test.mjs",
     "verify": "node scripts/verify.mjs",
-    "docs": "node skills/docmap/scripts/docmap.mjs",
+    "docmap": "node skills/docmap/scripts/docmap.mjs",
     "backlog": "node skills/backlog/scripts/backlog.mjs"
   }
 }

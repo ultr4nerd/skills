@@ -37,12 +37,15 @@ shell aliases work too):
 ```json
 {
   "scripts": {
-    "docs": "node .claude/skills/docmap/scripts/docmap.mjs",
+    "docmap": "node .claude/skills/docmap/scripts/docmap.mjs",
     "backlog": "node .claude/skills/backlog/scripts/backlog.mjs",
     "design": "node .claude/skills/design/scripts/design.mjs"
   }
 }
 ```
+
+Name the docmap script `docmap`, not `docs`: `npm docs` and `pnpm docs` are package-manager
+built-ins that exit 0 without running the script, so a `docs check` there is a false green.
 
 Requirements: Node >= 20. No npm dependencies.
 
