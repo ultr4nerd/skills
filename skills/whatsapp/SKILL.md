@@ -63,11 +63,31 @@ Every command prints one envelope: `{"success": bool, "data": ..., "error": stri
 
 - Resolve names to a JID first (`contacts search` or `chats list --query`); `--chat` takes a JID
   such as `5215512345678@s.whatsapp.net` (person) or `...@g.us` (group).
+- `contacts search` and `chats list --query` are accent-sensitive: "Cesar" does not find "César".
+  No hit or no exact match: retry with the accented and unaccented spellings and with fewer words
+  ("César Chávez Ruiz", then "César", then "Chávez"). `messages search` ignores accents.
+- Use the full name to pick between similar contacts; if more than one still fits, ask.
 - Results are the local mirror only. `data.source.last_sync_at` says how fresh it is; if it is old or
   null, say so instead of claiming there are no new messages.
 - Pages: when `data.page.has_more` is true, repeat the same command with `--cursor <next_cursor>`.
   Fetch only what the task needs; summarize long threads instead of dumping them.
 - No hits from `search` is not proof a message never existed: history before pairing may be missing.
+
+JSON shapes (wacli 0.26.0; field casing differs by command):
+
+| Command | `data` | Fields |
+|---|---|---|
+| `chats list` | list | `jid`, `name`, `kind`, `last_message_ts`, `unread`, `unread_count`, `pinned`, `archived`, `muted_until` |
+| `contacts search` | list | `jid`, `name`, `phone`, `alias`, `system_name`, `updated_at` |
+| `messages list` / `search` | object: `messages`, `page`, `source` (+ `fts` on search) | each message: `MsgID`, `Timestamp` (UTC), `FromMe`, `SenderJID`, `SenderName`, `Text`, `DisplayText`, `MediaType`, `MediaCaption`, `Filename` |
+
+- Show `DisplayText` (it describes media, e.g. "Sent video", where `Text` may hold the caption).
+  A message with no `FromMe` key is from the other side.
+- `DisplayText: "(message)"` with no text is a content-free system event (security code change,
+  call signal, unsupported payload). Say it exists; do not guess its content.
+- Convert `Timestamp` to the user's local time when you report it.
+- With `--json` the continuation hint ("More local messages: ... --cursor") goes to stderr; the
+  cursor is also in `data.page.next_cursor`.
 
 ## Sending protocol
 

@@ -122,8 +122,30 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.wacli.sync.plist
 launchctl print gui/$(id -u)/sh.wacli.sync | grep -E 'state|last exit'
 ```
 
-Stop or remove (only when asked): `launchctl bootout gui/$(id -u)/sh.wacli.sync`, then delete the
-plist.
+How it behaves:
+
+- **Reboot / login:** the plist lives in `~/Library/LaunchAgents`, so launchd starts sync at every
+  login (`RunAtLoad`). It is a per-user agent: it runs while the user is logged in, not before.
+- **Sleep / offline:** the connection drops while the Mac sleeps or has no network and reconnects
+  by itself (`--max-reconnect 0`); messages from that gap arrive as an offline backlog on reconnect.
+- **Login Items:** macOS lists the agent under System Settings → General → Login Items &
+  Extensions (it may show a "background item added" notice). Turning it off there disables it.
+- **Phone inactive for a long time:** WhatsApp logs out linked devices when the phone itself has not
+  been used for a while (about 14 days). Sync then exits with `logged_out` and is not restarted;
+  re-pair with step 2.
+
+Control (only when asked; say which one you run):
+
+| Goal | Command |
+|---|---|
+| Status and last exit | `launchctl print gui/$(id -u)/sh.wacli.sync \| grep -E 'state\|last exit'` |
+| Restart (after upgrading wacli) | `launchctl kickstart -k gui/$(id -u)/sh.wacli.sync` |
+| Pause until next login | `launchctl bootout gui/$(id -u)/sh.wacli.sync` (resume: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.wacli.sync.plist`) |
+| Disable across reboots | `launchctl bootout ...` then `launchctl disable gui/$(id -u)/sh.wacli.sync` (undo: `launchctl enable ...` then `bootstrap`) |
+| Remove | `bootout`, then delete the plist |
+
+`bootout` alone does not survive a reboot: the plist is still there, so sync comes back at the next
+login. Use disable or remove when the user wants it off for good.
 
 ### Linux (systemd user unit)
 
@@ -153,6 +175,10 @@ loginctl enable-linger "$USER"   # optional, ask first: keeps it running after l
 Why restart only on failure: when the phone unlinks the device, sync exits cleanly with
 `logged_out`; restarting it would loop. Re-pairing (step 2) is the fix.
 
+Control: `systemctl --user stop wacli-sync` pauses until the next login or boot;
+`systemctl --user disable --now wacli-sync` keeps it off; `systemctl --user restart wacli-sync`
+after upgrading wacli. Without linger the unit stops when the user logs out.
+
 ## 4. Verify
 
 ```sh
@@ -165,6 +191,8 @@ version, the linked number, whether the service is installed and where its log i
 
 ## Undo (only when the user asks)
 
-1. Stop the service (launchd `bootout` / `systemctl --user disable --now wacli-sync`).
+1. Remove the service: launchd `bootout`, then delete `~/Library/LaunchAgents/sh.wacli.sync.plist`
+   (a `bootout` alone comes back at the next login); systemd `systemctl --user disable --now wacli-sync`,
+   then delete the unit file.
 2. `wacli auth logout` unlinks the device (it also disappears from the phone's Linked devices).
 3. Deleting `~/.wacli` removes every stored message and the keys. Confirm twice; it cannot be undone.
