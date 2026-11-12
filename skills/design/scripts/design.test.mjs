@@ -476,6 +476,105 @@ describe('tailwind', () => {
   });
 });
 
+describe('shadcn', () => {
+  // Every required role, mapped onto the four base colors and radius.card.
+  const vars = () => {
+    const v = { primary: 'color.primary', 'primary-foreground': 'color.on-primary', destructive: 'color.primary', ring: 'color.primary', radius: 'radius.card' };
+    for (const r of ['background', 'card', 'popover', 'secondary', 'muted', 'accent']) v[r] = 'color.surface';
+    for (const r of ['foreground', 'card-foreground', 'popover-foreground', 'secondary-foreground', 'muted-foreground', 'accent-foreground', 'border', 'input']) v[r] = 'color.on-surface';
+    return v;
+  };
+  const config = (extra = {}) => ({ css: { tailwind: true }, shadcn: { vars: vars() }, ...extra });
+
+  test('colors leave @theme and the color reset is dropped; shadcn vars are resolved per theme', () => {
+    const dir = built({
+      config: config({ themes: { dark: 'design/themes/dark.json' }, themeSelector: '.{name}' }),
+      files: { 'design/themes/dark.json': { color: { surface: { $value: '{primitive.color.ink}' }, 'on-surface': { $value: '{primitive.color.white}' } } } },
+    });
+    const css = read(dir, 'design/tokens.css');
+    const theme = /@theme \{([\s\S]*?)\n\}/.exec(css)[1];
+    assert.doesNotMatch(theme, /--color-/);
+    assert.match(theme, /--radius-card: 12px;/);
+    assert.match(css, /:root \{[^}]*--color-primary: var\(--primitive-color-blue\);/);
+    const shadcnRoot = /shadcn\/ui \(design.json "shadcn.vars"\) \*\/\n:root \{([\s\S]*?)\n\}/.exec(css)[1];
+    assert.match(shadcnRoot, /--background: #ffffff;/);
+    assert.match(shadcnRoot, /--primary-foreground: #ffffff;/);
+    assert.match(shadcnRoot, /--radius: 12px;/);
+    assert.doesNotMatch(shadcnRoot, /var\(/);
+    const dark = [...css.matchAll(/\n\.dark \{([\s\S]*?)\n\}/g)].map((m) => m[1]).find((b) => b.includes('--background'));
+    assert.match(dark, /--background: #1f1a16;/);
+    assert.doesNotMatch(dark, /--primary:/);
+    assert.match(read(dir, 'design/TOKENS.md'), /- `primary` `color.primary`, `primary-foreground` `color.on-primary`/);
+    const r = ok(dir, 'check');
+    assert.match(r.out, /warning: design.json: shadcn.vars: not mapped: chart-1/);
+  });
+
+  test('without shadcn the Tailwind output is unchanged', () => {
+    const css = read(built({ config: { css: { tailwind: true } } }), 'design/tokens.css');
+    assert.match(css, /--color-\*: initial;/);
+    assert.doesNotMatch(css, /shadcn/);
+  });
+
+  test('unknown, unmapped, primitive and wrong-type roles are errors', () => {
+    const v = vars();
+    delete v.ring;
+    delete v.border;
+    Object.assign(v, { primay: 'color.primary', input: 'primitive.color.ink', radius: 'color.surface', muted: 'color.surfce' });
+    const dir = built({ config: config({ shadcn: { vars: v } }) });
+    const r = fails(dir, 1, null, 'check');
+    assert.match(r.out, /shadcn.vars.primay: not a shadcn variable \(did you mean primary\?\)/);
+    assert.match(r.out, /shadcn.vars: 2 required variable\(s\) not mapped: border, ring/);
+    assert.match(r.out, /shadcn.vars.input: primitive.color.ink is a primitive/);
+    assert.match(r.out, /shadcn.vars.radius: color.surface is a color, needs a dimension/);
+    assert.match(r.out, /shadcn.vars.muted: unknown token color.surfce \(did you mean `color.surface`\?\)/);
+  });
+
+  test('X-foreground on X is checked per theme, without repeating token pairs', () => {
+    const v = { ...vars(), 'muted-foreground': 'color.surface', muted: 'color.primary' };
+    const dir = built({
+      config: config({ shadcn: { vars: v }, themes: { dark: 'design/themes/dark.json' } }),
+      files: { 'design/themes/dark.json': { color: { primary: { $value: '{primitive.color.tomato}' }, 'on-primary': { $value: '{primitive.color.ink}' } } } },
+    });
+    const r = fails(dir, 1, null, 'check');
+    assert.doesNotMatch(r.out, /on background \(color.surface\)/); // same token on both sides is skipped
+    assert.match(r.out, /contrast shadcn muted-foreground \(color.surface\) on muted \(color.primary\) \[theme dark\]: [\d.]+:1, needs 4.5:1/);
+    assert.doesNotMatch(r.out, /contrast shadcn primary-foreground/);
+  });
+
+  test('a Tailwind radius token named like shadcn\'s derived radii is a collision', () => {
+    const tokens = baseTokens();
+    tokens.radius.lg = { $value: '16px', $description: 'Large' };
+    fails(built({ tokens, config: config() }), 1, /radius.lg: --radius-lg collides with shadcn's @theme inline/, 'check');
+  });
+
+  test('scan flags palette classes, arbitrary values and ui imports outside the inventory', () => {
+    const files = {
+      'src/page.tsx': [
+        'import { Button } from "@/components/ui/button"',
+        "import { Dialog } from '@/components/ui/dialog'",
+        'const a = <div className="bg-zinc-500 hover:text-red-600/50 p-[13px] w-[var(--x)] data-[state=open]:bg-muted bg-background" />',
+        'const b = <div className="text-white p-[3px]" /> // design-allow',
+      ].join('\n'),
+      'components/ui/dialog.tsx': 'const o = <div className="bg-black/50 h-[calc(100%-1px)]" />',
+      'design/components/button.md': '---\ntitle: Button\ndescription: Actions\nread_when: Building a button\n---\n\n# Button\n',
+    };
+    const dir = built({ files, config: config({ scan: { include: ['src/**/*.tsx', 'components/**/*.tsx'] } }) });
+    const r = fails(dir, 1, null, 'scan');
+    assert.match(r.out, /src\/page.tsx:2: shadcn component dialog is not in the DESIGN.md inventory/);
+    assert.match(r.out, /src\/page.tsx:3: Tailwind palette class bg-zinc-500/);
+    assert.match(r.out, /src\/page.tsx:3: Tailwind palette class text-red-600\/50/);
+    assert.match(r.out, /src\/page.tsx:3: arbitrary value p-\[13px\]/);
+    assert.doesNotMatch(r.out, /button|var\(--x\)|data-\[state|bg-background|:4:|components\/ui/);
+    assert.match(r.out, /design scan: 4 finding\(s\) in 2 file\(s\)/);
+    fails(dir, 1, /error: src\/page.tsx:3: arbitrary value/, 'check');
+  });
+
+  test('config errors', () => {
+    fails(project({ config: { shadcn: [] } }), 1, /"shadcn" must be an object/, 'check');
+    fails(project({ config: { shadcn: { vars: { primary: 1 } } } }), 1, /"shadcn.vars" must map/, 'check');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Docs
 
