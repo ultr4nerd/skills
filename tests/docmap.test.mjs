@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { run, parseFrontmatter, slugify, globToRegExp } from './docmap.mjs';
+import { run, parseFrontmatter, slugify, globToRegExp } from '../skills/docmap/scripts/docmap.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers

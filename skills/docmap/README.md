@@ -204,6 +204,6 @@ diff. Breaking changes to the frontmatter schema or the index format bump the ma
 ## Development
 
 ```sh
-node --test skills/docmap/scripts/docmap.test.mjs    # unit and CLI tests on temp fixture trees
+node --test tests/docmap.test.mjs    # unit and CLI tests on temp fixture trees
 npm run verify                                        # from the repo root: every skill's tests + packaging checks
 ```

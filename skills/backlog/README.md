@@ -290,7 +290,7 @@ backlog learn 3 "Session store needs creds in .env before the cookie work" \
 ## Development
 
 ```sh
-node --test scripts/backlog.test.mjs          # from this folder
+node --test tests/backlog.test.mjs            # from the repo root (tests are not shipped with the skill)
 npm run verify                                # from the repo root: every skill's tests + packaging checks
 ```
 

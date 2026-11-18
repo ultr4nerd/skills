@@ -341,5 +341,5 @@ against the vendors' docs in October 2026; re-check before shipping) and a token
 ## Development
 
 ```sh
-node --test skills/design/scripts/design.test.mjs    # unit and CLI tests on temp projects
+node --test tests/design.test.mjs    # unit and CLI tests on temp projects
 ```

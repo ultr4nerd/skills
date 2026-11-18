@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// verify: the single definition of "green" for this repo. Runs every skill's tests, checks
-// that every skill has a SKILL.md with name + description matching its folder, that the README
+// verify: the single definition of "green" for this repo. Runs the tests in tests/, checks
+// that every skill has a SKILL.md with name + description matching its folder (under 20000 bytes),
+// that skills/ ships no dev files (installers copy the whole folder), that the README
 // catalog lists every skill, that each CLI answers --version with the version in package.json,
 // and that this repo's own docs/ and backlog/ (dogfooding) are consistent.
 import { spawnSync } from 'node:child_process';
@@ -40,6 +41,10 @@ for (const name of skills) {
   if (field('name') !== name) problems.push(`${name}: SKILL.md name is "${field('name')}", expected "${name}"`);
   const desc = field('description') || '';
   if (desc.length < 40 || desc.length > 1024) problems.push(`${name}: description must be 40..1024 chars (is ${desc.length})`);
+  // Claude Code re-attaches an invoked skill truncated to 20000 characters after compaction;
+  // bytes are a stricter bound for non-ASCII text.
+  const bytes = Buffer.byteLength(text);
+  if (bytes >= 20000) problems.push(`${name}: SKILL.md is ${bytes} bytes; keep it under 20000 and move detail to README/references`);
   const lines = text.split('\n').length;
   if (lines > 500) problems.push(`${name}: SKILL.md is ${lines} lines; keep it under 500 and move detail to README/references`);
   if (!fs.existsSync(path.join(dir, 'README.md'))) problems.push(`${name}: missing README.md`);
@@ -53,6 +58,20 @@ for (const name of skills) {
   }
 }
 
+// `npx skills add` copies a skill folder as is, so tests and fixtures under skills/ end up in the
+// user's project. Dev files live in tests/ at the repo root.
+const DEV_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+const DEV_DIR = new Set(['tests', 'test', '__tests__', 'fixtures', 'node_modules']);
+(function walk(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const rel = path.relative(ROOT, path.join(dir, e.name));
+    if (e.isDirectory()) {
+      if (DEV_DIR.has(e.name)) problems.push(`${rel}/: dev directory inside skills/ is installed into users' projects; move it to tests/`);
+      else walk(path.join(dir, e.name));
+    } else if (DEV_FILE.test(e.name)) problems.push(`${rel}: test file inside skills/ is installed into users' projects; move it to tests/`);
+  }
+})(skillsDir);
+
 for (const [skill, args] of [['docmap', ['check']], ['backlog', ['check']]]) {
   const cli = path.join(skillsDir, skill, 'scripts', `${skill}.mjs`);
   if (!fs.existsSync(cli)) continue;
@@ -61,7 +80,9 @@ for (const [skill, args] of [['docmap', ['check']], ['backlog', ['check']]]) {
   else console.log((r.stdout || '').trim());
 }
 
-const tests = spawnSync(process.execPath, ['--test', ...skills.map((n) => path.join(skillsDir, n, 'scripts', `${n}.test.mjs`)).filter((f) => fs.existsSync(f))], { encoding: 'utf8', stdio: 'inherit' });
+const testsDir = path.join(ROOT, 'tests');
+const testFiles = fs.existsSync(testsDir) ? fs.readdirSync(testsDir).filter((f) => f.endsWith('.test.mjs')).map((f) => path.join(testsDir, f)) : [];
+const tests = spawnSync(process.execPath, ['--test', ...testFiles], { encoding: 'utf8', stdio: 'inherit' });
 if (tests.status !== 0) problems.push('tests failed');
 
 for (const p of problems) console.error(`error: ${p}`);

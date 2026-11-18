@@ -7,7 +7,7 @@ import path from 'node:path';
 import {
   run, contrastRatio, parseCssColor, parseHex, toHex, colorFromObject, suggestForeground,
   globToRegExp, expandBraces, prettyJson, normalizeRaw,
-} from './design.mjs';
+} from '../skills/design/scripts/design.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
