@@ -56,6 +56,7 @@ only, no role wrappers (crew covers multi-agent work), the installer picks the a
 - 2026-11-18 16:35 claude: critique: 7 competing definitions -> accepted (epic Context/Notes rewritten to the approved scope; ISS-0023 includes skills/setup/README.md; setup is a tool guide for the skills CLI under decision 0003, so no new decision, and it pins the skills CLI version). crew is optional, recommended for multi-agent work.
 - 2026-11-18 16:35 claude: critique: unexercised inputs -> accepted: refused or partial confirmation, installer non-zero exit, invalid existing JSON, missing README markers. Others left out of v1.
 - 2026-11-18 17:02 claude: gate 1: approved by Mauricio (merged #24 at 17:02)
+- 2026-11-18 17:23 claude: ruling: ISS-0023 and ISS-0024 ship in one PR (separate commits) — owner asked for fewer merge gates (2026-11-18) and the smoke run fixes the skill it tests — cost if wrong: a larger PR to review
 
 ## Outcome
 <!-- filled by `backlog done`: what shipped, how it was verified, learnings, follow-ups -->
