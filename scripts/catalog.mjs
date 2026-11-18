@@ -49,24 +49,31 @@ function table(entries) {
   return [...HEADER, ...entries.map((e) => `| [\`${e.name}\`](skills/${e.name}/) | ${cell(e.summary)} | ${cell(e.triggers)} |`)].join('\n');
 }
 
-/** Replaces the content between each category's markers; throws on missing or duplicated markers. */
+/** Replaces the content between each category's markers; throws on missing, duplicated or overlapping markers. */
 export function renderReadme(readmeText, catalog) {
-  let text = readmeText;
+  // Validate every category against the ORIGINAL text before replacing anything.
+  const regions = [];
   for (const category of CATEGORIES) {
     const entries = catalog.skills.filter((e) => e.category === category);
     const start = `<!-- catalog:${category}:start -->`;
     const end = `<!-- catalog:${category}:end -->`;
-    const count = (s) => text.split(s).length - 1;
+    const count = (s) => readmeText.split(s).length - 1;
     const [ns, ne] = [count(start), count(end)];
     if (!entries.length && !ns && !ne) continue;
     if (ns !== 1 || ne !== 1) {
       throw new Error(`README.md: expected exactly one "${start}" and one "${end}" (found ${ns} and ${ne})${entries.length ? '' : ' (category has no entries; remove the markers or add a skill)'}`);
     }
-    const a = text.indexOf(start);
-    const b = text.indexOf(end);
-    if (b < a) throw new Error(`README.md: "${end}" comes before "${start}"`);
-    text = `${text.slice(0, a + start.length)}\n${entries.length ? table(entries) : ''}\n${text.slice(b)}`;
+    const a = readmeText.indexOf(start) + start.length;
+    const b = readmeText.indexOf(end);
+    if (b < a - start.length) throw new Error(`README.md: "${end}" comes before "${start}"`);
+    regions.push({ category, a, b, entries });
   }
+  const sorted = [...regions].sort((x, y) => x.a - y.a);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].a - 1 < sorted[i - 1].b) throw new Error(`README.md: catalog regions "${sorted[i - 1].category}" and "${sorted[i].category}" overlap`);
+  }
+  let text = readmeText;
+  for (const r of sorted.reverse()) text = `${text.slice(0, r.a)}\n${r.entries.length ? table(r.entries) : ''}\n${text.slice(r.b)}`;
   return text;
 }
 

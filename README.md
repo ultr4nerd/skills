@@ -104,10 +104,9 @@ npm run verify     # every skill's tests + packaging checks + docmap check + bac
 npm test           # tests only
 ```
 
-The skill catalog lives once in `catalog.json` (name, category, summary, triggers, `requires`,
-`optional`). Edit it, then run `node scripts/catalog.mjs --write` to regenerate the tables between
-the `<!-- catalog:<category>:start/end -->` markers above; `--check` (part of `verify`) exits 1 when
-they are stale. Add a skill folder and its catalog entry together.
+The skill catalog lives once in `catalog.json`: edit it, run `node scripts/catalog.mjs --write` to
+regenerate the README tables between the `<!-- catalog:<category>:start/end -->` markers, and add a
+skill folder and its entry together; `verify` runs `--check` and fails when they are stale.
 
 `verify` is what CI runs (`.github/workflows/verify.yml`, Node 20 and 22 on Linux and macOS).
 Versions: every CLI answers `--version` with the `version` of `package.json`; tag releases as

@@ -46,6 +46,34 @@ describe('validate', () => {
     assert.match(p, /summary must be a single line/);
     assert.match(p, /needs a non-empty triggers/);
   });
+  test('nameless and null entries', () => {
+    const c = good(); c.skills.push(null, { category: 'software' });
+    assert.equal(validate(c, names).filter((x) => /has no name/.test(x)).length, 2);
+  });
+  test('requires and optional must be arrays', () => {
+    const c = good(); c.skills[0].requires = 'b'; c.skills[1].optional = undefined;
+    const p = validate(c, names).join('\n');
+    assert.match(p, /"a" requires must be an array/);
+    assert.match(p, /"b" optional must be an array/);
+  });
+  test('self-dependency in requires and optional', () => {
+    const c = good(); c.skills[0].requires = ['a']; c.skills[0].optional = ['a'];
+    const p = validate(c, names).join('\n');
+    assert.match(p, /"a" requires itself/);
+    assert.match(p, /"a" optional itself/);
+  });
+  test('missing or non-string summary and triggers', () => {
+    const c = good(); delete c.skills[0].summary; c.skills[0].triggers = 5;
+    const p = validate(c, names).join('\n');
+    assert.match(p, /"a" needs a non-empty summary/);
+    assert.match(p, /"a" needs a non-empty triggers/);
+  });
+  test('newlines rejected in summary and triggers', () => {
+    const c = good(); c.skills[0].summary = 'x\ny'; c.skills[0].triggers = 'x\r\ny';
+    const p = validate(c, names).join('\n');
+    assert.match(p, /summary must be a single line/);
+    assert.match(p, /triggers must be a single line/);
+  });
   test('skills must be an array', () => assert.match(validate({}, names)[0], /must be an array/));
 });
 
@@ -68,6 +96,18 @@ describe('renderReadme', () => {
   test('missing markers throw', () => assert.throws(() => renderReadme('# no markers\n', good()), /found 0 and 0/));
   test('duplicated markers throw', () => assert.throws(() => renderReadme(md() + md(), good()), /found 2 and 2/));
   test('end before start throws', () => assert.throws(() => renderReadme('<!-- catalog:software:end -->\n<!-- catalog:software:start -->\n', good()), /comes before/));
+  test('duplicate later-category marker inside an earlier region throws', () => {
+    const c = { skills: [entry('a'), entry('b', { category: 'tool-guide' })] };
+    const ok = '<!-- catalog:software:start -->\n<!-- catalog:software:end -->\n<!-- catalog:tool-guide:start -->\n<!-- catalog:tool-guide:end -->\n';
+    const bad = ok.replace('\n<!-- catalog:software:end -->', '\n<!-- catalog:tool-guide:start -->\n<!-- catalog:software:end -->');
+    assert.doesNotThrow(() => renderReadme(ok, c));
+    assert.throws(() => renderReadme(bad, c), /found 2 and 1/);
+  });
+  test('overlapping regions throw', () => {
+    const c = { skills: [entry('a'), entry('b', { category: 'tool-guide' })] };
+    const t = '<!-- catalog:software:start -->\n<!-- catalog:tool-guide:start -->\n<!-- catalog:software:end -->\n<!-- catalog:tool-guide:end -->\n';
+    assert.throws(() => renderReadme(t, c), /overlap/);
+  });
   test('category with no entries needs no markers', () => {
     const c = { skills: [entry('a')] };
     assert.equal(renderReadme(md(), c).includes('catalog:setup'), false);
@@ -117,6 +157,13 @@ describe('CLI', () => {
     assert.equal(r.code, 1);
     assert.match(r.err, /"extra" is missing/);
     assert.match(readme(), /\nold\n/);
+  });
+  test('duplicate later-category marker inside an earlier region fails CLI, README untouched', () => {
+    fs.writeFileSync(path.join(root, 'catalog.json'), JSON.stringify({ skills: [entry('a'), entry('b', { category: 'tool-guide' })] }));
+    const t = '<!-- catalog:software:start -->\n<!-- catalog:tool-guide:start -->\n<!-- catalog:software:end -->\n<!-- catalog:tool-guide:start -->\nx\n<!-- catalog:tool-guide:end -->\n';
+    fs.writeFileSync(path.join(root, 'README.md'), t);
+    assert.equal(run('--write').code, 1);
+    assert.equal(readme(), t);
   });
   test('no flag prints usage and exits 2', () => assert.equal(run().code, 2));
 });
