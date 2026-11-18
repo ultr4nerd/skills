@@ -45,14 +45,19 @@ Install nothing before this confirmation.
 ## 3. Install
 
 ```sh
-npx skills add <source> --skill <a,b,...> -y
+npx skills add <source> --skill <a> <b> <c> -y
 ```
 
 - `<source>` defaults to `ultr4nerd/skills`. The user may give another (a fork, or a local
   checkout path); use it as given.
-- `--skill` is exactly the confirmed list. No `--agent` by default: the installer detects the
+- `--skill` takes the confirmed names **space-separated** (a comma list is read as one name and
+  fails). Skills already installed in the project are left out unless the user asks to update
+  them, so a rerun changes nothing. No `--agent` by default: the installer detects the
   agent and picks the directory. Only when the user names an agent, add `--agent <name>`.
-- Non-zero exit: stop, show the error, wire nothing. Do not retry with other flags unasked.
+- Non-zero exit: stop, show the error, wire nothing. Do not retry with other flags unasked. On
+  "no matching skills", compare the names with `npx skills add <source> --list` in the report.
+- The installer also writes `skills-lock.json` (for a local source it holds a relative path to
+  this machine). Mention it in the report; committing it is the user's call.
 - A skill reported as skipped (for example a YAML parse error) is not installed: say so and do
   not wire it.
 
@@ -60,12 +65,13 @@ Then find each installed CLI. A skill has a CLI when its installed folder contai
 `scripts/<name>.mjs` (today docmap, backlog, design). From the git root:
 
 ```sh
-find -L . -name node_modules -prune -o -path '*/<name>/scripts/<name>.mjs' -print
+find -L . \( -name node_modules -o -name .git \) -prune -o -path '*/<name>/scripts/<name>.mjs' -print
 ```
 
 The installer may use `.claude/skills/`, `.agents/skills/` or another directory, possibly
 symlinked, so one file can match twice: deduplicate by resolved real path. Several different
-matches: prefer the location the installer reported; else ask. Zero matches for a skill that has
+matches: ask (the installer's summary box can name a different directory than the one it
+wrote; what `find` returns is authoritative). Zero matches for a skill that has
 a CLI: stop wiring that skill and tell the user. Quote the found path in every command.
 
 ## 4. Wire
@@ -93,7 +99,7 @@ resolves (item 1). A declined or skipped action also skips whatever depends on i
    - Present and valid: add `verify` only if missing, with confirmation; change no other key.
    - Derive the verify command from `package.json` scripts: `npm run verify` if a `verify` script
      exists; else join those present of `lint`, `typecheck`, `test` as
-     `npm run lint && npm run typecheck && npm test`; if none exist, propose none and ask what
+     `npm run lint && npm run typecheck && npm test` (only `test`: `npm test`); if none exist, propose none and ask what
      "done" means here. Always show the command and get a yes before writing.
 4. **design.** If wired, run nothing; tell the user `<run design> --help` is the start (it needs
    their brand input).
@@ -104,12 +110,14 @@ resolves (item 1). A declined or skipped action also skips whatever depends on i
 
 - `AGENTS.md` exists: do not touch it. Suggest the lines worth adding (map rows for `docs/` and
   `backlog/`, the verify rule) and let the user decide.
-- Missing: copy `references/agents-md.md` (strip its leading HTML comment). Keep only the map
+- Missing: copy `references/agents-md.md` (strip its leading HTML comment and every `[skill]`
+  tag; the project name is `package.json` `name`). Keep only the map
   rows and hard rules of skills actually wired (rows follow custom paths from `docmap.json` /
   `backlog.json`); the stub marks each block with its skill. Verify rule: use the command
   confirmed in step 4, else ask once; if the user defers, omit the rule and say so. Never leave a
   placeholder. Replace every `<docmap>`, `<backlog>`, `<design>` in the stub with that skill's
-  resolved invocation (never `npm run <name>` for a preserved unrelated alias). Show it, write it after a yes. If `CLAUDE.md` is also missing, offer a one-line
+  resolved invocation (never `npm run <name>` for a preserved unrelated alias). Keep the
+  `design/DESIGN.md` row only if that file exists; otherwise add "(after `<design> init`)". Show it, write it after a yes. If `CLAUDE.md` is also missing, offer a one-line
   `CLAUDE.md` that says to read `AGENTS.md`.
 - crew: if installed, mention it is for multi-agent work and needs a `crew.json` (see its
   README). If not installed and the project is multi-agent, offer it once.

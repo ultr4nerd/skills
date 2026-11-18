@@ -59,7 +59,7 @@ More categories (content creation) are coming; each will have its own section he
 Into a project (any agent that reads `.claude/skills/` or `.agents/skills/`):
 
 ```sh
-npx skills add ultr4nerd/skills            # interactive picker; --skill docmap,backlog to skip it
+npx skills add ultr4nerd/skills            # interactive picker; --skill docmap backlog to skip it
 # or copy the folders by hand
 cp -R skills/docmap skills/backlog skills/design <project>/.claude/skills/
 ln -s ../.claude/skills <project>/.agents/skills

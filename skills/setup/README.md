@@ -11,7 +11,7 @@ Software projects only (Node + git). Ask your agent "set up these skills in this
 
 - Node >= 20 and `npx`.
 - The `skills` CLI, checked against **1.9.0** (`npx skills --version`, 2026-11-18). Other versions
-  may work; the install flags used are `add <source> --skill <list> -y` and optionally `--agent`.
+  may work; the install flags used are `add <source> --skill <a> <b> -y` (names space-separated) and optionally `--agent`.
 - A git repository with a `package.json` (setup offers `npm init -y`, with your consent).
 
 ## The five steps
@@ -21,7 +21,7 @@ Software projects only (Node + git). Ask your agent "set up these skills in this
 2. **Recommend.** From [`references/catalog.md`](references/catalog.md): hard dependencies
    (`requires`) are added to your selection and announced; you confirm the full list. A refusal
    or a trimmed list is honoured. `crew` is offered as optional, for multi-agent work only.
-3. **Install.** `npx skills add <source> --skill <list> -y`. The source defaults to
+3. **Install.** `npx skills add <source> --skill <a> <b> -y` (space-separated names). The source defaults to
    `ultr4nerd/skills` and can be a fork or a local checkout. No `--agent` unless you name one. A
    non-zero exit stops setup. Installed CLIs are then located on disk and those paths are used.
 4. **Wire.** Missing `package.json` scripts only; `docmap init` only when there is no
