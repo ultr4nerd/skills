@@ -1,0 +1,11 @@
+{
+  "roles": {
+    "orchestrator": [{ "tier": "capable" }],
+    "explorer": [{ "tier": "fast" }],
+    "critic": [{ "provider": "openai", "model": "gpt-6-astra", "effort": "high" }, { "tier": "max" }],
+    "implementer": [{ "tier": "fast" }],
+    "advisor": [{ "tier": "max" }],
+    "reviewer": [{ "provider": "openai", "model": "gpt-6-astra", "effort": "medium" }, { "tier": "capable" }]
+  },
+  "limits": { "explorers": 3, "reviewRounds": 2, "advisorCallsPerIssue": 3 }
+}
