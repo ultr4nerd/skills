@@ -166,7 +166,7 @@ Exit codes: 0 ok, 1 error, 2 usage error or unknown command, 3 nothing to do (`n
 | `unblock <ID>` | Back to `in-progress` if an owner is set, else `todo`. The usual transition checks apply. |
 | `done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]` | Refuses if any `- [ ]` remains under Acceptance criteria (unless `--force`, which is logged). Outcome comes from `--outcome`, else `## Summary` of the progress file, else an existing non-empty `## Outcome`; refuses if it would be empty. Sets done, clears owner, deletes the progress file and the `progress/<ID>/` directory, regenerates INDEX, logs `done: <first line of outcome>`, prints the open-children count of the parent epic and a reminder to verify and commit. With docmap installed, prints a hint when the Log shows friction and no learning is linked; `--learning`/`--decision` file one. |
 | `learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]` | Needs docmap. Runs `docmap new docs/learnings` (or `docs/decisions`) with tags `[<id>, <area>, ...issue tags]`, logs `learning: <path>` on the issue, prints the path and which sections to write. Without `--read-when` the new doc fails `docmap check` until you set it, on purpose. |
-| `retro [--days N] [--json]` | Closed issues (done or cancelled) updated in the last N days (default 14) whose Log shows friction (`blocked`, `unblocked`, `revert`, `retry`/`again`, `workaround`, `flaky`, `--force`, `cancelled`) and that have no `learning:`/`decision:` log line. One row per candidate with its signals. |
+| `retro [--days N] [--json [--learnings]]` | Closed issues (done or cancelled) updated in the last N days (default 14) whose Log shows friction (`blocked`, `unblocked`, `revert`, `retry`/`again`, `workaround`, `flaky`, `--force`, `cancelled`) and that have no `learning:`/`decision:` log line. One row per candidate with its signals. With docmap installed it also lists learnings of any age (not superseded or deprecated) whose `## Enforcement` is missing, empty or still the template text; `None: <why>` counts as answered. `--json` prints the issue array; `--json --learnings` prints `{ issues, learnings }`. |
 | `cancel <ID> "<reason>"` | `status=cancelled`, log the reason, clear owner, delete the progress file and the `progress/<ID>/` directory. |
 | `next [--area a] [--owner o] [--claim] [--branch b] [--json]` | Pick the best issue: `todo`, not an epic, all `depends_on` done; ordered by priority, earliest due, oldest created, lowest id. With `--owner`: if that owner already has an in-progress issue, print it as `RESUME` (exit 0); if they have a blocked one, print it as `BLOCKED` with the reason (exit 4). `--claim` runs `start` (same `--branch` and `branchPattern` behaviour). Nothing available prints `NOTHING TO DO` (exit 3). With docmap installed the brief ends with `related:` lines (see below); `--json` carries them as `related`. |
 | `board` | Counts per status, in-progress with owner and days since last update, blocked with reasons, overdue, top 5 ready todo. |
@@ -214,7 +214,11 @@ only get written if something asks for them while the friction is fresh. When th
   the issue id and link it from the Log. `done` also prints a hint when the Log shows friction
   (blocked, revert, retry, workaround, `--force`) and nothing was recorded.
 - **Sweep periodically.** `retro` lists the closed issues that still owe a learning, so capture
-  does not depend on in-the-moment discipline. Weekly is enough.
+  does not depend on in-the-moment discipline, and the learnings that still owe a check (their
+  `## Enforcement` is open). Weekly is enough.
+- **Prefer a check to prose.** A learning only protects the next agent if it is found and obeyed;
+  a lint rule, test, type or verify step protects it every time. Each learning's `## Enforcement`
+  names that check, or says `None: <why>`.
 
 The quality of this loop is the quality of each learning's `read_when`: it is the line
 `docmap find` scores highest and the one an agent reads to decide whether to open the file.

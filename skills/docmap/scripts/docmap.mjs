@@ -12,8 +12,13 @@ const STATUSES = ['draft', 'current', 'deprecated', 'superseded'];
 const REQUIRED_KEYS = ['title', 'description', 'read_when'];
 const TEMPLATES = ['doc', 'decision', 'learning', 'spec', 'readme'];
 // Sections a decision / learning needs to be useful later. A learning without
-// "Apply when" is never recovered; a decision without "Why" cannot be revisited.
-const REQUIRED_SECTIONS = { decisions: ['Decision', 'Why'], learnings: ['Lesson', 'Apply when'] };
+// "Apply when" is never recovered; a decision without "Why" cannot be revisited; a learning
+// without "Enforcement" stays prose that the next agent may never read (learnings should end
+// as a check whenever one is possible).
+const REQUIRED_SECTIONS = { decisions: ['Decision', 'Why'], learnings: ['Lesson', 'Apply when', 'Enforcement'] };
+// First words of the Enforcement placeholder in templates/learning.md. backlog retro matches
+// the same prefix; keep them in sync.
+const ENFORCEMENT_PLACEHOLDER = 'The check that stops a repeat';
 const NUMBERED_FILE = /^(\d{4})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 const DRAFT_MAX_AGE_DAYS = 30;
 const LONG_DOC_LINES = 400;
@@ -763,6 +768,13 @@ function sectionEnd(doc, idx, withChildren) {
   return doc.lines.length + 1;
 }
 
+// Trimmed body of the first section whose heading slugifies to `name` (children included).
+function sectionText(doc, name) {
+  const idx = doc.headings.findIndex((h) => h.slug === slugify(name));
+  if (idx === -1) return null;
+  return doc.lines.slice(doc.headings[idx].line, sectionEnd(doc, idx, true) - 1).join('\n').trim();
+}
+
 function sectionWords(doc, idx) {
   const start = doc.headings[idx];
   const end = sectionEnd(doc, idx, true);
@@ -946,6 +958,12 @@ function checkWarnings(doc, report) {
     const have = new Set(doc.headings.map((h) => h.slug));
     const missing = REQUIRED_SECTIONS[kind].filter((s) => !have.has(slugify(s)));
     if (missing.length) report('warning', doc.rel, null, `missing section(s) ${missing.map((s) => `"## ${s}"`).join(', ')}; without them this ${kind.slice(0, -1)} is hard to apply later`);
+    if (kind === 'learnings' && !missing.includes('Enforcement')) {
+      const text = sectionText(doc, 'Enforcement');
+      if (!text || text.startsWith(ENFORCEMENT_PLACEHOLDER)) {
+        report('warning', doc.rel, null, '"## Enforcement" is empty or still the template text; name the check that stops a repeat, or write "None: <why>"');
+      }
+    }
   }
   if (doc.lines.length > LONG_DOC_LINES) {
     report('warning', doc.rel, null, `${doc.lines.length} lines; consider splitting so agents can read sections`);
