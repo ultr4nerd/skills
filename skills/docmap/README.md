@@ -96,7 +96,7 @@ plus learnings whose `## Enforcement` is still open.
 | `exclude` | glob patterns (`*`, `**`, `?`) matched against root-relative paths; matching dirs and files are ignored |
 | `numbered` | dirs whose files must be `NNNN-slug.md`; `new` picks the next free number |
 | `maxDescription` | max characters of `description` |
-| `templatesDir` | where `new` looks for templates; falls back to the templates shipped next to the script |
+| `templatesDir` | where `new` looks for templates; falls back to the templates shipped next to the script. `init` sets it to the installed copy (`.claude/skills/...`, `.agents/skills/...`) when the script lives inside the project |
 
 The project root is found by walking up from the current directory looking for
 `docmap.json`, then `.git`, else the current directory. All output paths are relative to it,
