@@ -1,0 +1,50 @@
+{
+  "skills": [
+    {
+      "name": "docmap",
+      "category": "software",
+      "summary": "Recursive, indexed documentation. Every folder gets a generated `INDEX.md` (what is here, when to read it); the CLI searches, outlines and extracts single sections so an agent never reads a whole doc blind. Numbered decisions and learnings with templates; `init` scaffolds a new project.",
+      "triggers": "Reading, searching or adding project docs; recording a decision or a learning",
+      "requires": [],
+      "optional": []
+    },
+    {
+      "name": "backlog",
+      "category": "software",
+      "summary": "File-based issue tracker for agents (\"Linear in a folder\"). Markdown issues with priority, status, dependencies and a log; a CLI with `next --claim`, `start`, `log`, `block`, `done`, `board`, `check`, `retro`. Built for long autonomous loops. With docmap installed it surfaces related decisions and learnings at claim time and files new ones at close time.",
+      "triggers": "Planning work, \"what's next\", creating/closing issues, status reports, autonomous runs, retros",
+      "requires": [],
+      "optional": [
+        "docmap"
+      ]
+    },
+    {
+      "name": "design",
+      "category": "software",
+      "summary": "Design system in files. W3C DTCG tokens are the single source; `build` generates CSS (optionally a Tailwind v4 `@theme`), a typed TS export and a one-line-per-token `TOKENS.md`; a 150-line `DESIGN.md` is the agent entry point, with component specs, surface targets (wallet pass, email, print, OG) and reference intake notes. `check` covers references, WCAG contrast per theme, stale outputs and hard-coded values in source.",
+      "triggers": "Building or changing UI, email, print, passes or OG images; turning a brand book, screenshots or CSS into tokens; adding colors, fonts or components",
+      "requires": [],
+      "optional": []
+    },
+    {
+      "name": "whatsapp",
+      "category": "tool-guide",
+      "summary": "Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Can also set it up: installs `wacli` 0.26+, pairs it by phone code (you type the code on your phone) and installs the sync service, asking before each step.",
+      "triggers": "Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli",
+      "requires": [],
+      "optional": []
+    },
+    {
+      "name": "crew",
+      "category": "orchestration",
+      "summary": "Builds one feature with an agent team on top of `backlog`: the orchestrator plans, a fast model implements each child, a capable model advises on hard decisions (fixed triggers), and a model from another provider critiques the plan and reviews each diff. `crew.json` maps roles to seats (provider + model, or a tier); a seat the harness cannot reach falls back and is logged. You approve the plan and merge. References for T3, Claude Code and Codex.",
+      "triggers": "Building a feature \"with crew\" or \"with the team\"; planning and implementing an epic with cross-provider review",
+      "requires": [
+        "backlog"
+      ],
+      "optional": [
+        "docmap"
+      ]
+    }
+  ]
+}

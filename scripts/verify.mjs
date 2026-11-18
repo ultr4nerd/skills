@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // verify: the single definition of "green" for this repo. Runs the tests in tests/, checks
 // that every skill has a SKILL.md with name + description matching its folder (under 20000 bytes),
-// that skills/ ships no dev files (installers copy the whole folder), that the README
-// catalog lists every skill, that each CLI answers --version with the version in package.json,
+// that skills/ ships no dev files (installers copy the whole folder), that catalog.json matches
+// skills/ and the README tables generated from it are fresh, that each CLI answers --version with the version in package.json,
 // and that this repo's own docs/ and backlog/ (dogfooding) are consistent.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { plan as catalogPlan } from './catalog.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -15,6 +16,11 @@ const skillsDir = path.join(ROOT, 'skills');
 const skills = fs.readdirSync(skillsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 const problems = [];
+
+// catalog.json is the single source for the README catalog (scripts/catalog.mjs).
+const catalogResult = catalogPlan(ROOT);
+problems.push(...catalogResult.problems);
+for (const o of catalogResult.outputs) if (o.stale) problems.push(`${o.file} is stale against catalog.json; run: node scripts/catalog.mjs --write`);
 
 for (const name of skills) {
   const dir = path.join(skillsDir, name);
