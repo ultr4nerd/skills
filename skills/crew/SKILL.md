@@ -100,8 +100,10 @@ A subagent writes its full output to a file and replies in the short format of
    `backlog done <ID> --outcome "<what shipped; how verified; parked findings>"` (it runs verify)
    and commit with the issue id.
 10. **Gate 2**: push the child's branch, open its PR against `main`, and continue with the next
-    child that does not depend on an unmerged one. When none is left, end with the final report.
-    The human reviews and merges.
+    child that does not depend on an unmerged one. When none is left, close the epic: its critique
+    answers are already in its Log, so delete `progress/<EPIC>/` first (`backlog check` flags it
+    once every child is closed, and `backlog done` runs verify before cleaning up), then
+    `backlog done <EPIC> --outcome "..."`. End with the final report. The human reviews and merges.
 
 ## Resuming
 

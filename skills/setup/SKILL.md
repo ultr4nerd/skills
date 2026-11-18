@@ -52,7 +52,8 @@ npx skills add <source> --skill <a> <b> <c> -y
   checkout path); use it as given.
 - `--skill` takes the confirmed names **space-separated** (a comma list is read as one name and
   fails). Skills already installed in the project are left out unless the user asks to update
-  them, so a rerun changes nothing. No `--agent` by default: the installer detects the
+  them, so a rerun changes nothing. Nothing left to install: skip the command and go on to
+  finding the CLIs. No `--agent` by default: the installer detects the
   agent and picks the directory. Only when the user names an agent, add `--agent <name>`.
 - Non-zero exit: stop, show the error, wire nothing. Do not retry with other flags unasked. On
   "no matching skills", compare the names with `npx skills add <source> --list` in the report.
