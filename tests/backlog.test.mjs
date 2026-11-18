@@ -50,7 +50,7 @@ const indexFile = () => path.join(root, 'backlog/INDEX.md');
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlog-test-'));
-  fs.writeFileSync(path.join(root, 'backlog.json'), JSON.stringify({ areas: ['core', 'web'], verify: 'npm test' }));
+  fs.writeFileSync(path.join(root, 'backlog.json'), JSON.stringify({ areas: ['core', 'web'], verify: 'node -e 0' }));
 });
 
 afterEach(() => {
@@ -223,7 +223,7 @@ describe('start, log, block, unblock', () => {
     seed();
     const r = ok(['start', 'ISS-2', '--owner', 'ana', '--branch', 'feat/login']);
     assert.match(r.out, /ISS-0002  P1  in-progress  feature  area:core  owner:ana/);
-    assert.match(r.out, /verify: npm test/);
+    assert.match(r.out, /verify: node -e 0/);
     assert.equal(fm('ISS-0002', 'status'), 'in-progress');
     assert.equal(fm('ISS-0002', 'branch'), 'feat/login');
     assert.ok(fs.existsSync(progress('ISS-0002')));
@@ -274,7 +274,7 @@ describe('done', () => {
     assert.equal(fm('ISS-0002', 'status'), 'in-progress');
     ok(['done', 'ISS-2', '--outcome', 'forced through', '--force']);
     const text = readIssue('ISS-0002');
-    assert.match(text, /ana: done --force with 2 unchecked acceptance criteria\n- 2026-10-17 10:12 ana: done: .+\n/);
+    assert.match(text, /ana: done --force with 2 unchecked acceptance criteria\n- 2026-10-17 10:12 ana: done --force: verify skipped \(node -e 0\)\n- 2026-10-17 10:12 ana: done: .+\n/);
     assert.match(text, /## Outcome\nforced through\n$/);
     assert.equal(fm('ISS-0002', 'status'), 'done');
     assert.equal(fm('ISS-0002', 'owner'), '');
@@ -291,10 +291,44 @@ describe('done', () => {
     const pf = progress('ISS-0002');
     fs.writeFileSync(pf, fs.readFileSync(pf, 'utf8').replace(/## Summary\n[\s\S]*$/, '## Summary\nShipped the endpoint.\n\n- verified with npm test\n'));
     const r = ok(['done', 'ISS-2']);
-    assert.match(r.out, /ISS-0002 done: Add login endpoint\nparent ISS-0001 has 1 open child\nnext: run "npm test", then commit with ISS-0002/);
+    assert.match(r.out, /^verify: node -e 0\nISS-0002 done: Add login endpoint\nparent ISS-0001 has 1 open child\nnext: commit with ISS-0002/);
+    assert.match(readIssue('ISS-0002'), /ana: verify passed: node -e 0\n/);
     assert.match(readIssue('ISS-0002'), /## Outcome\nShipped the endpoint\.\n\n- verified with npm test\n$/);
     assert.match(fs.readFileSync(indexFile(), 'utf8'), /## done \(1\)/);
     fails(['tick', 'ISS-3', '5'], 1, /criterion 5 does not exist/);
+  });
+  const config = (extra) => fs.writeFileSync(path.join(root, 'backlog.json'), JSON.stringify({ areas: ['core', 'web'], ...extra }));
+  const ready = () => { seed(); ok(['start', 'ISS-2', '--owner', 'ana']); ok(['tick', 'ISS-2', 'all']); };
+
+  test('runs the configured verify and refuses to close when it fails', () => {
+    config({ verify: 'node -e "process.exit(3)"' });
+    ready();
+    const r = fails(['done', 'ISS-2', '--outcome', 'x'], 1, /ISS-0002: verify failed \("node -e "process.exit\(3\)"" exit 3\)/);
+    assert.match(r.out, /^verify: node -e /);
+    assert.equal(fm('ISS-0002', 'status'), 'in-progress');
+    assert.doesNotMatch(readIssue('ISS-0002'), /## Outcome\nx/);
+    assert.ok(fs.existsSync(progress('ISS-0002')));
+  });
+
+  test('--no-verify and --force skip verify and log it; retro counts it as friction', () => {
+    config({ verify: 'node -e "process.exit(1)"' });
+    ready();
+    const r = ok(['done', 'ISS-2', '--outcome', 'x', '--no-verify']);
+    assert.doesNotMatch(r.out, /^verify:/m);
+    assert.match(r.out, /next: run "node -e "process.exit\(1\)"", then commit/);
+    assert.match(readIssue('ISS-0002'), /ana: done --no-verify: verify skipped \(node -e "process.exit\(1\)"\)\n/);
+    ok(['start', 'ISS-3', '--owner', 'ana', '--force']);
+    ok(['done', 'ISS-3', '--outcome', 'y', '--force']);
+    assert.match(readIssue('ISS-0003'), /ana: done --force: verify skipped/);
+  });
+
+  test('without verify in backlog.json nothing runs (the built-in default is only a hint)', () => {
+    config({});
+    ready();
+    const r = ok(['done', 'ISS-2', '--outcome', 'x']);
+    assert.doesNotMatch(r.out, /^verify:/m);
+    assert.match(r.out, /next: run "pnpm verify", then commit with ISS-0002/);
+    assert.doesNotMatch(readIssue('ISS-0002'), /verify (passed|skipped)/);
   });
 });
 
@@ -324,7 +358,7 @@ describe('next', () => {
     seed();
     const r = ok(['next', '--owner', 'ana', '--claim']);
     assert.match(r.out, /^CLAIMED: ISS-0002\n/);
-    assert.match(r.out, /progress: progress\/ISS-0002\.md\nverify: npm test\n$/);
+    assert.match(r.out, /progress: progress\/ISS-0002\.md\nverify: node -e 0\n$/);
     assert.equal(fm('ISS-0002', 'owner'), 'ana');
     assert.match(ok(['next', '--owner', 'ana', '--claim']).out, /^RESUME: ISS-0002\n/);
     assert.match(ok(['next', '--owner', 'bob']).out, /^NEXT: ISS-0004\n/);
