@@ -30,6 +30,7 @@ Acceptance from docs/specs/crew-v1-...: run a real M-sized issue through crew on
 ## Notes
 
 ## Log
+- 2026-11-18 17:38 claude: crew run on ISS-0003 (T3, 2026-11-18): 16:29 -> 17:39 wall (~70 min incl. 2 merge waits); seats: critic/reviewer pi/gpt-6-astra, implementer claudeAgent/sonnet, orchestrator opus; advisor never triggered. Found before merge: critique 7 points; ISS-0002 1 Important + 2 Minor; ISS-0023 1 Critical + 6 Important + 1 Minor over 3 rounds; smoke run 1 Critical (install syntax, from the orchestrator's own brief) + 9 minor. crew/backlog frictions found: epic progress dir orphan (fixed #23), epic dir blocks closing the epic (crew SKILL.md fix), per-branch issue ids collide, INDEX.md conflicts between parallel PRs.
 
 ## Outcome
 <!-- filled by `backlog done`: what shipped, how it was verified, learnings, follow-ups -->

@@ -45,6 +45,14 @@
       "optional": [
         "docmap"
       ]
+    },
+    {
+      "name": "setup",
+      "category": "setup",
+      "summary": "Installs and wires the other skills in a Node project, through the `skills` CLI and with your confirmation at each step: picks the skills (hard dependencies added), installs them, adds the missing `package.json` scripts, runs `docmap init` and writes `backlog.json` when it is safe, and writes an `AGENTS.md` stub only if there is none. Never overwrites files or scripts.",
+      "triggers": "Setting up these skills in a project; \"install the skills\", \"set up docmap and backlog\"; bootstrapping the harness in a new repo",
+      "requires": [],
+      "optional": []
     }
   ]
 }

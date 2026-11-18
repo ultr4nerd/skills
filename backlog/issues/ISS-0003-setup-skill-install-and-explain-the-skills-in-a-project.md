@@ -2,7 +2,7 @@
 id: ISS-0003
 title: "setup skill: install and explain the skills in a project"
 kind: epic
-status: todo
+status: done
 priority: P1
 area: setup
 parent:
@@ -28,8 +28,8 @@ only, no role wrappers (crew covers multi-agent work), the installer picks the a
 ## Scope
 
 ## Acceptance criteria
-- [ ] ISS-0002, ISS-0023 and ISS-0024 done
-- [ ] setup listed in README and catalog.json, verify green
+- [x] ISS-0002, ISS-0023 and ISS-0024 done
+- [x] setup listed in README and catalog.json, verify green
 
 
 ## Notes
@@ -56,6 +56,10 @@ only, no role wrappers (crew covers multi-agent work), the installer picks the a
 - 2026-11-18 16:35 claude: critique: 7 competing definitions -> accepted (epic Context/Notes rewritten to the approved scope; ISS-0023 includes skills/setup/README.md; setup is a tool guide for the skills CLI under decision 0003, so no new decision, and it pins the skills CLI version). crew is optional, recommended for multi-agent work.
 - 2026-11-18 16:35 claude: critique: unexercised inputs -> accepted: refused or partial confirmation, installer non-zero exit, invalid existing JSON, missing README markers. Others left out of v1.
 - 2026-11-18 17:02 claude: gate 1: approved by Mauricio (merged #24 at 17:02)
+- 2026-11-18 17:23 claude: ruling: ISS-0023 and ISS-0024 ship in one PR (separate commits) — owner asked for fewer merge gates (2026-11-18) and the smoke run fixes the skill it tests — cost if wrong: a larger PR to review
+- 2026-11-18 17:38 claude: progress/ISS-0003 removed before done (critique answers are in this Log): with all children closed check flags it, and done runs verify before deleting it; crew SKILL.md now says so
+- 2026-11-18 17:38 claude: verify passed: npm run verify
+- 2026-11-18 17:38 claude: done: setup skill shipped through crew: ISS-0002 catalog.json (#25), ISS-0023 setup skill, ISS-0024 smoke run with fixes. C...
 
 ## Outcome
-<!-- filled by `backlog done`: what shipped, how it was verified, learnings, follow-ups -->
+setup skill shipped through crew: ISS-0002 catalog.json (#25), ISS-0023 setup skill, ISS-0024 smoke run with fixes. Critique by gpt-6-astra reshaped the plan (7 points); reviews caught 1 Important in ISS-0002 and 1 Critical + 6 Important in ISS-0023; the smoke run caught the install-syntax bug no review saw. Follow-up: ISS-0026.

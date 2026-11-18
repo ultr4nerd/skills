@@ -20,6 +20,16 @@ and the project keeps its own memory of what was decided and what went wrong.
 | [`design`](skills/design/) | Design system in files. W3C DTCG tokens are the single source; `build` generates CSS (optionally a Tailwind v4 `@theme`), a typed TS export and a one-line-per-token `TOKENS.md`; a 150-line `DESIGN.md` is the agent entry point, with component specs, surface targets (wallet pass, email, print, OG) and reference intake notes. `check` covers references, WCAG contrast per theme, stale outputs and hard-coded values in source. | Building or changing UI, email, print, passes or OG images; turning a brand book, screenshots or CSS into tokens; adding colors, fonts or components |
 <!-- catalog:software:end -->
 
+### Setup
+
+One skill that installs and wires the others in your project, asking before each step.
+
+<!-- catalog:setup:start -->
+| Skill | What it does | When it triggers |
+|---|---|---|
+| [`setup`](skills/setup/) | Installs and wires the other skills in a Node project, through the `skills` CLI and with your confirmation at each step: picks the skills (hard dependencies added), installs them, adds the missing `package.json` scripts, runs `docmap init` and writes `backlog.json` when it is safe, and writes an `AGENTS.md` stub only if there is none. Never overwrites files or scripts. | Setting up these skills in a project; "install the skills", "set up docmap and backlog"; bootstrapping the harness in a new repo |
+<!-- catalog:setup:end -->
+
 ### Tool guides
 
 Markdown-only skills that teach an agent to drive a CLI you install separately (decision 0003).
@@ -42,14 +52,14 @@ its harness (decision 0005). They never run commands to reach a model.
 | [`crew`](skills/crew/) | Builds one feature with an agent team on top of `backlog`: the orchestrator plans, a fast model implements each child, a capable model advises on hard decisions (fixed triggers), and a model from another provider critiques the plan and reviews each diff. `crew.json` maps roles to seats (provider + model, or a tier); a seat the harness cannot reach falls back and is logged. You approve the plan and merge. References for T3, Claude Code and Codex. | Building a feature "with crew" or "with the team"; planning and implementing an epic with cross-provider review |
 <!-- catalog:orchestration:end -->
 
-More categories (content creation, setup) are coming; each will have its own section here.
+More categories (content creation) are coming; each will have its own section here.
 
 ## Install
 
 Into a project (any agent that reads `.claude/skills/` or `.agents/skills/`):
 
 ```sh
-npx skills add ultr4nerd/skills            # interactive picker; --skill docmap,backlog to skip it
+npx skills add ultr4nerd/skills            # interactive picker; --skill docmap backlog to skip it
 # or copy the folders by hand
 cp -R skills/docmap skills/backlog skills/design <project>/.claude/skills/
 ln -s ../.claude/skills <project>/.agents/skills
