@@ -12,29 +12,35 @@ and the project keeps its own memory of what was decided and what went wrong.
 
 ### Running software projects
 
+<!-- catalog:software:start -->
 | Skill | What it does | When it triggers |
 |---|---|---|
 | [`docmap`](skills/docmap/) | Recursive, indexed documentation. Every folder gets a generated `INDEX.md` (what is here, when to read it); the CLI searches, outlines and extracts single sections so an agent never reads a whole doc blind. Numbered decisions and learnings with templates; `init` scaffolds a new project. | Reading, searching or adding project docs; recording a decision or a learning |
 | [`backlog`](skills/backlog/) | File-based issue tracker for agents ("Linear in a folder"). Markdown issues with priority, status, dependencies and a log; a CLI with `next --claim`, `start`, `log`, `block`, `done`, `board`, `check`, `retro`. Built for long autonomous loops. With docmap installed it surfaces related decisions and learnings at claim time and files new ones at close time. | Planning work, "what's next", creating/closing issues, status reports, autonomous runs, retros |
 | [`design`](skills/design/) | Design system in files. W3C DTCG tokens are the single source; `build` generates CSS (optionally a Tailwind v4 `@theme`), a typed TS export and a one-line-per-token `TOKENS.md`; a 150-line `DESIGN.md` is the agent entry point, with component specs, surface targets (wallet pass, email, print, OG) and reference intake notes. `check` covers references, WCAG contrast per theme, stale outputs and hard-coded values in source. | Building or changing UI, email, print, passes or OG images; turning a brand book, screenshots or CSS into tokens; adding colors, fonts or components |
+<!-- catalog:software:end -->
 
 ### Tool guides
 
 Markdown-only skills that teach an agent to drive a CLI you install separately (decision 0003).
 They ship no code and never install the tool.
 
+<!-- catalog:tool-guide:start -->
 | Skill | What it does | When it triggers |
 |---|---|---|
 | [`whatsapp`](skills/whatsapp/) | Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Can also set it up: installs `wacli` 0.26+, pairs it by phone code (you type the code on your phone) and installs the sync service, asking before each step. | Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli |
+<!-- catalog:tool-guide:end -->
 
 ### Orchestration
 
 Markdown-only skills that teach the agent running your session to coordinate other agents through
 its harness (decision 0005). They never run commands to reach a model.
 
+<!-- catalog:orchestration:start -->
 | Skill | What it does | When it triggers |
 |---|---|---|
 | [`crew`](skills/crew/) | Builds one feature with an agent team on top of `backlog`: the orchestrator plans, a fast model implements each child, a capable model advises on hard decisions (fixed triggers), and a model from another provider critiques the plan and reviews each diff. `crew.json` maps roles to seats (provider + model, or a tier); a seat the harness cannot reach falls back and is logged. You approve the plan and merge. References for T3, Claude Code and Codex. | Building a feature "with crew" or "with the team"; planning and implementing an epic with cross-provider review |
+<!-- catalog:orchestration:end -->
 
 More categories (content creation, setup) are coming; each will have its own section here.
 
@@ -97,6 +103,10 @@ before you start.
 npm run verify     # every skill's tests + packaging checks + docmap check + backlog check
 npm test           # tests only
 ```
+
+The skill catalog lives once in `catalog.json`: edit it, run `node scripts/catalog.mjs --write` to
+regenerate the README tables between the `<!-- catalog:<category>:start/end -->` markers, and add a
+skill folder and its entry together; `verify` runs `--check` and fails when they are stale.
 
 `verify` is what CI runs (`.github/workflows/verify.yml`, Node 20 and 22 on Linux and macOS).
 Versions: every CLI answers `--version` with the `version` of `package.json`; tag releases as
