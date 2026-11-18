@@ -9,6 +9,7 @@ Entry point for any agent working in this repo. `CLAUDE.md` points here.
 | `README.md` | Catalog of skills, install, the harness pattern | First time here |
 | `skills/<name>/SKILL.md` | Agent protocol of a skill | Using or changing that skill |
 | `skills/<name>/README.md` | Full reference of a skill (CLI, config, formats) | Changing that skill's behaviour |
+| `tests/<name>.test.mjs` | Tests of a skill's CLI; kept out of `skills/` so installers never copy them | Changing that skill's CLI |
 | `docs/INDEX.md` | Decisions and learnings about this repo | Before changing tooling or process |
 | `backlog/INDEX.md` | Open work | Picking what to do |
 | `progress/<ID>.md` | Live plan of an issue in progress | Resuming someone else's work |

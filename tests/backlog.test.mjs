@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), 'backlog.mjs');
+const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'backlog', 'scripts', 'backlog.mjs');
 const NOW = '2026-10-17T10:12:00';
 
 let root;
