@@ -581,6 +581,19 @@ describe('board, cancel, help, root discovery', () => {
     assert.ok(!fs.existsSync(progress('ISS-0002')));
   });
 
+  test('check accepts progress/<EPIC>/ while the epic has open children, not after', () => {
+    seed();
+    fs.mkdirSync(path.join(root, 'progress', 'ISS-0001'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'progress', 'ISS-0001', 'critique.md'), 'x\n');
+    ok(['check']);
+    fs.writeFileSync(path.join(root, 'progress', 'ISS-0001.md'), 'x\n');
+    fails(['check'], 1, /progress\/ISS-0001\.md: orphan progress file \(ISS-0001 is todo\)/);
+    fs.rmSync(path.join(root, 'progress', 'ISS-0001.md'));
+    ok(['cancel', 'ISS-2', 'dropped']);
+    ok(['cancel', 'ISS-3', 'dropped']);
+    fails(['check'], 1, /progress\/ISS-0001: orphan progress directory \(ISS-0001 is todo\)/);
+  });
+
   test('done removes the progress/<ID>/ directory and leaves other entries alone', () => {
     seed();
     ok(['start', 'ISS-2', '--owner', 'ana']);

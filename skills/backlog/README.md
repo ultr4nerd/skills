@@ -193,7 +193,7 @@ Errors (exit 1): missing or unparsable frontmatter, missing required keys, id/fi
 duplicate ids, unknown `depends_on` or `parent`, dependency or parent cycles, invalid
 status/priority/kind/area/estimate/date, in-progress without owner, done with an empty Outcome,
 with `branchPattern` set: an in-progress issue whose `branch` is empty, does not match the pattern or encodes a different number, and a current branch (when known) that matches the pattern but encodes an issue that does not exist or is still `todo` or `backlog` (`done` and `cancelled` are accepted, so an issue can be closed on its own branch);
-stale or missing INDEX, orphan `progress/*.md` or `progress/<ID>/` directory whose issue is missing or not in progress, blocked or review.
+stale or missing INDEX, orphan `progress/*.md` or `progress/<ID>/` directory whose issue is missing or not in progress, blocked or review (an epic's `progress/<EPIC>/` directory is allowed while any of its children is open, for orchestration reports such as crew's).
 
 Warnings (exit 0): done with unchecked criteria, todo or in-progress whose parent epic is still `backlog`, in-progress not updated for more than `staleDays`,
 overdue issues, todo (non-epic) with no acceptance criteria.
