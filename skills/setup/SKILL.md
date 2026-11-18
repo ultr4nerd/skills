@@ -11,7 +11,7 @@ installed. Software projects with Node only. Everything that changes the project
 the user first; a refusal or a partial yes is honoured and never retried.
 
 Report at the end (last thing in your turn): what was installed, what was written, what was
-skipped and why, and the next command to try (for example `npm run backlog -- board`).
+skipped and why, and the next command to try (for example `<run backlog> board`, using the invocation resolved in step 4).
 
 ## 1. Preflight
 
@@ -79,7 +79,8 @@ resolves (item 1). A declined or skipped action also skips whatever depends on i
    keep it, run no `npm run <name>` command for that skill, ask, and (if the user agrees) run the
    CLI directly as `node "<found path>" <args>`; say so in the report. Edit with `node` (parse,
    add keys, write 2-space indent and a trailing newline). Never name the docmap script `docs`
-   (`npm docs` is a built-in). Below, `<run docmap>` means `npm run docmap --` or the direct form.
+   (`npm docs` is a built-in). Record one resolved invocation per wired skill: `npm run <name> --` when the alias
+   resolves, else `node "<found path>"`. Below, `<run docmap>` etc. mean that invocation.
 2. **docmap.** `init` regenerates every `INDEX.md` under `docs/` (and deletes orphan ones), so
    generated indexes are replaced by design and hand-written ones must never be touched. Run
    `<run docmap> init` only when `docmap.json` is absent AND (`docs/` does not exist OR every
@@ -107,7 +108,8 @@ resolves (item 1). A declined or skipped action also skips whatever depends on i
   rows and hard rules of skills actually wired (rows follow custom paths from `docmap.json` /
   `backlog.json`); the stub marks each block with its skill. Verify rule: use the command
   confirmed in step 4, else ask once; if the user defers, omit the rule and say so. Never leave a
-  placeholder. Show it, write it after a yes. If `CLAUDE.md` is also missing, offer a one-line
+  placeholder. Replace every `<docmap>`, `<backlog>`, `<design>` in the stub with that skill's
+  resolved invocation (never `npm run <name>` for a preserved unrelated alias). Show it, write it after a yes. If `CLAUDE.md` is also missing, offer a one-line
   `CLAUDE.md` that says to read `AGENTS.md`.
 - crew: if installed, mention it is for multi-agent work and needs a `crew.json` (see its
   README). If not installed and the project is multi-agent, offer it once.
