@@ -176,10 +176,12 @@ describe('CLI', () => {
     assert.match(readme(), /\nold\n/);
   });
   test('duplicate later-category marker inside an earlier region fails CLI, README untouched', () => {
-    fs.writeFileSync(path.join(root, 'catalog.json'), JSON.stringify({ skills: [entry('a'), entry('b', { category: 'tool-guide' })] }));
-    const t = '<!-- catalog:software:start -->\n<!-- catalog:tool-guide:start -->\n<!-- catalog:software:end -->\n<!-- catalog:tool-guide:start -->\nx\n<!-- catalog:tool-guide:end -->\n';
+    fs.writeFileSync(path.join(root, 'catalog.json'), JSON.stringify({ skills: [entry('a'), entry('b', { category: 'tool-guide' }), entry('setup', { category: 'setup' })] }));
+    const t = '<!-- catalog:software:start -->\n<!-- catalog:tool-guide:start -->\n<!-- catalog:software:end -->\n<!-- catalog:tool-guide:start -->\nx\n<!-- catalog:tool-guide:end -->\n<!-- catalog:setup:start -->\n<!-- catalog:setup:end -->\n';
     fs.writeFileSync(path.join(root, 'README.md'), t);
-    assert.equal(run('--write').code, 1);
+    const r = run('--write');
+    assert.equal(r.code, 1);
+    assert.match(r.err, /found 2 and 1/);
     assert.equal(readme(), t);
   });
   test('--write also generates skills/setup/references/catalog.md; --check flags it stale', () => {
