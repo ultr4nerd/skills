@@ -27,6 +27,15 @@ They ship no code and never install the tool.
 |---|---|---|
 | [`whatsapp`](skills/whatsapp/) | Read, search and send WhatsApp messages from your own account through [`wacli`](https://github.com/openclaw/wacli) (linked device + local SQLite mirror). Read-only by default; every send needs an explicit request, a resolved recipient and a confirmed draft. Can also set it up: installs `wacli` 0.26+, pairs it by phone code (you type the code on your phone) and installs the sync service, asking before each step. | Checking, summarizing, finding or answering WhatsApp messages; sending a WhatsApp text or file; setting up wacli |
 
+### Orchestration
+
+Markdown-only skills that teach the agent running your session to coordinate other agents through
+its harness (decision 0005). They never run commands to reach a model.
+
+| Skill | What it does | When it triggers |
+|---|---|---|
+| [`crew`](skills/crew/) | Builds one feature with an agent team on top of `backlog`: the orchestrator plans, a fast model implements each child, a capable model advises on hard decisions (fixed triggers), and a model from another provider critiques the plan and reviews each diff. `crew.json` maps roles to seats (provider + model, or a tier); a seat the harness cannot reach falls back and is logged. You approve the plan and merge. References for T3, Claude Code and Codex. | Building a feature "with crew" or "with the team"; planning and implementing an epic with cross-provider review |
+
 More categories (content creation, setup) are coming; each will have its own section here.
 
 ## Install

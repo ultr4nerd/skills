@@ -58,6 +58,24 @@ for (const name of skills) {
   }
 }
 
+// Example configs ship to users and are copied as is: they must parse, and none may hold a shell
+// command (decision 0005: orchestration config names models, the harness runs them).
+const COMMAND_KEY = /^(run|cmd|command|exec|shell|script)$/i;
+for (const name of skills) {
+  for (const f of fs.readdirSync(path.join(skillsDir, name)).filter((x) => x.endsWith('.example.json'))) {
+    const rel = `skills/${name}/${f}`;
+    let data;
+    try { data = JSON.parse(fs.readFileSync(path.join(skillsDir, name, f), 'utf8')); } catch (e) { problems.push(`${rel}: invalid JSON (${e.message})`); continue; }
+    (function scan(v, at) {
+      if (Array.isArray(v)) v.forEach((x, i) => scan(x, `${at}[${i}]`));
+      else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) {
+        if (name === 'crew' && COMMAND_KEY.test(k)) problems.push(`${rel}: "${at}.${k}" looks like a command; seats name a provider and model, never a command (decision 0005)`);
+        scan(x, `${at}.${k}`);
+      }
+    })(data, '$');
+  }
+}
+
 // `npx skills add` copies a skill folder as is, so tests and fixtures under skills/ end up in the
 // user's project. Dev files live in tests/ at the repo root.
 const DEV_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
