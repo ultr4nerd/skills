@@ -1280,9 +1280,12 @@ function collectChecks(ctx) {
         errors.push(`${ctx.rel(path.join(ctx.progressDir, f))}: orphan progress file (${issue ? `${id} is ${issue.fm.status}` : `${id} does not exist`})`);
       }
     }
+    // An epic never goes in-progress, but orchestration (crew) keeps epic-level reports in
+    // progress/<EPIC>/ while any of its children is still open.
+    const openEpic = (issue) => issue?.fm.kind === 'epic' && store.issues.some((c) => c.fm.parent === issue.fm.id && !CLOSED.includes(c.fm.status));
     for (const e of fs.readdirSync(ctx.progressDir, { withFileTypes: true }).filter((e) => e.isDirectory() && /^[A-Za-z]+-\d+$/.test(e.name)).sort((a, b) => a.name.localeCompare(b.name))) {
       const issue = store.byId.get(e.name);
-      if (!live(issue)) {
+      if (!live(issue) && !openEpic(issue)) {
         errors.push(`${ctx.rel(path.join(ctx.progressDir, e.name))}: orphan progress directory (${issue ? `${e.name} is ${issue.fm.status}` : `${e.name} does not exist`})`);
       }
     }
