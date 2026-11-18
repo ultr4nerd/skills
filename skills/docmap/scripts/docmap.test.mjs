@@ -27,7 +27,7 @@ function doc(title, extra = {}, body = `# ${title}\n\nBody text.\n`) {
 
 // Bodies that satisfy `check`'s section warnings for decisions and learnings.
 const DECISION_BODY = (title) => `# ${title}\n\n## Decision\n\nX.\n\n## Why\n\nY.\n\n## Consequences\n\nZ.\n`;
-const LEARNING_BODY = (title) => `# ${title}\n\n## What happened\n\nX.\n\n## Lesson\n\nY.\n\n## Apply when\n\nZ.\n`;
+const LEARNING_BODY = (title) => `# ${title}\n\n## What happened\n\nX.\n\n## Lesson\n\nY.\n\n## Apply when\n\nZ.\n\n## Enforcement\n\nverify step W.\n`;
 const decision = (title, extra = {}) => doc(title, extra, DECISION_BODY(title));
 
 function project(files, config = CONFIG) {
@@ -399,20 +399,39 @@ test('new scaffolds numbered decisions and slugified docs, then reindexes', () =
   assert.equal(cli(dir, 'new', 'docs', 'X', '--template', 'nope').code, 2);
 });
 
-test('check warns about decisions without Why and learnings without Apply when', () => {
+test('check warns about decisions without Why and learnings without Apply when or Enforcement', () => {
   const dir = project({
     ...NESTED,
     'docs/decisions/0003-bare.md': doc('Bare decision', {}, '# Bare decision\n\n## Decision\n\nX.\n'),
     'docs/learnings/0001-ok.md': doc('Fine', {}, LEARNING_BODY('Fine')),
     'docs/learnings/0002-bare.md': doc('Bare learning', {}, '# Bare learning\n\n## What happened\n\nX.\n'),
+    'docs/learnings/0003-none.md': doc('No check possible', {}, LEARNING_BODY('No check possible').replace('verify step W.', 'None: depends on a human reading the phone.')),
   });
   cli(dir, 'index');
   const r = cli(dir, 'check');
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /warning: docs\/decisions\/0003-bare\.md: missing section\(s\) "## Why"/);
-  assert.match(r.out, /warning: docs\/learnings\/0002-bare\.md: missing section\(s\) "## Lesson", "## Apply when"/);
+  assert.match(r.out, /warning: docs\/learnings\/0002-bare\.md: missing section\(s\) "## Lesson", "## Apply when", "## Enforcement"/);
   assert.ok(!r.out.includes('0001-ok.md'));
+  assert.ok(!r.out.includes('0003-none.md'), 'an explicit "None: <why>" is a valid Enforcement');
   assert.match(r.out, /2 warning\(s\)\)$/);
+});
+
+test('check warns when a learning keeps the Enforcement template text or leaves it empty', () => {
+  const dir = project(NESTED);
+  assert.equal(cli(dir, 'new', 'docs/learnings', 'Fresh one', '--description', 'd', '--read-when', 'r').code, 0);
+  const file = fs.readdirSync(path.join(dir, 'docs/learnings')).find((f) => f.endsWith('fresh-one.md'));
+  const tmpl = fs.readFileSync(path.join(dir, 'docs/learnings', file), 'utf8');
+  assert.match(tmpl, /^## Enforcement$/m, 'the learning template ships the section');
+  cli(dir, 'index');
+  const r = cli(dir, 'check');
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, new RegExp(`warning: docs/learnings/${file}: "## Enforcement" is empty or still the template text`));
+
+  fs.writeFileSync(path.join(dir, 'docs/learnings', file), tmpl.replace(/## Enforcement[\s\S]*$/, '## Enforcement\n'));
+  assert.match(cli(dir, 'check').out, /"## Enforcement" is empty or still the template text/);
+  fs.writeFileSync(path.join(dir, 'docs/learnings', file), tmpl.replace(/## Enforcement[\s\S]*$/, '## Enforcement\n\n`npm run lint` rule no-foo.\n'));
+  assert.doesNotMatch(cli(dir, 'check').out, /Enforcement/);
 });
 
 test('new --template readme writes README.md that becomes the directory row', () => {

@@ -21,3 +21,8 @@ The rule we now follow because of it.
 ## Apply when
 
 The trigger: how to recognise the situation next time.
+
+## Enforcement
+
+The check that stops a repeat (lint rule, type, test, verify step, API change) and where it
+lives, or "None: <why no check can catch it>". Prose is the last resort, not the default.

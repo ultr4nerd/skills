@@ -4,7 +4,7 @@ description: Text written before another tool call in the same turn can be invis
 read_when: Writing a skill step where the user must read and act on something the agent produced (a pairing code, an OTP, a URL, a question) while work continues in the background
 id: learnings-0002
 status: current
-updated: 2026-11-11
+updated: 2026-11-18
 tags: [iss-0013, whatsapp, harness, skills]
 ---
 
@@ -26,3 +26,8 @@ the harness reports when it exits, so watching it in the same turn adds nothing.
 
 A skill step that hands the user something time-sensitive or blocking while a background command
 waits on them: pairing codes, OTPs, device-login URLs, confirmation prompts.
+
+## Enforcement
+
+None: the harness decides what the user sees, and no test can observe it. The rule is applied
+where it matters, in the whatsapp SKILL.md pairing step (ISS-0013), which ends the turn on the code.

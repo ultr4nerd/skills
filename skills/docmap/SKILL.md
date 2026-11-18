@@ -35,11 +35,14 @@ at the right moment, so:
 - Before starting work in an area where something went wrong before: `docmap find <topic> --in docs/learnings`.
   If the backlog skill is installed, `backlog next --claim` prints these as `related:`.
 - Record a learning whenever a task revealed a non-obvious failure, a wrong assumption, or a
-  trick that saved real time. Record a decision whenever you chose between real alternatives.
+  trick that saved real time. Prose is the weakest guard: first try to make the lesson a check
+  (lint rule, type, test, verify step, or an API that makes the mistake impossible) and name it
+  under `## Enforcement`; write `None: <why>` only when no check can catch it. Record a decision whenever you chose between real alternatives.
   The `read_when` line is what makes either findable later: write the situation, not the topic
   ("Touching session cookies behind the ingress", not "cookies").
 - Templates enforce the shape: decision = `## Decision`, `## Why`, `## Consequences`;
-  learning = `## What happened`, `## Lesson`, `## Apply when`. `check` warns when a section is missing.
+  learning = `## What happened`, `## Lesson`, `## Apply when`, `## Enforcement`. `check` warns when a
+  section is missing, or when `## Enforcement` is empty or still the template text.
 
 ## Adding or changing docs
 
@@ -60,7 +63,7 @@ Run `docmap check` (or `check --fix` to regenerate indexes first). It must print
 `docmap check: OK (...)`. Errors fail: bad or missing frontmatter, long description, bad status,
 duplicate ids, unknown `supersedes`, broken relative links, stale indexes, bad numbering.
 Warnings do not fail but deserve a note: old drafts, docs over 400 lines, decisions without
-`## Why`, learnings without `## Apply when`.
+`## Why`, learnings without `## Apply when` or with no real `## Enforcement`.
 
 ## Commands
 

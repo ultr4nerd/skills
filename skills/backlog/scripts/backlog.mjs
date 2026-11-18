@@ -767,6 +767,29 @@ function frictionSignals(issue) {
 
 const hasLearning = (issue) => logLines(issue.body).some((l) => /: (learning|decision): /.test(l));
 
+// Learnings whose ## Enforcement does not name a check yet: the section is missing, empty, or
+// still the placeholder from docmap's templates/learning.md (same prefix as docmap's
+// ENFORCEMENT_PLACEHOLDER). "None: <why>" counts as answered. Superseded/deprecated are skipped.
+const ENFORCEMENT_PLACEHOLDER = 'The check that stops a repeat';
+function learningsWithoutEnforcement(ctx) {
+  if (!findDocmap(ctx)) return [];
+  const dir = path.join(ctx.root, docmapRoot(ctx), 'learnings');
+  if (!fs.existsSync(dir)) return [];
+  const rows = [];
+  for (const name of fs.readdirSync(dir).sort()) {
+    if (!name.endsWith('.md') || name === 'README.md' || name === 'INDEX.md') continue;
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    const status = (text.match(/^status:\s*(\S+)/m) || [])[1];
+    if (status === 'superseded' || status === 'deprecated') continue;
+    const title = ((text.match(/^title:\s*(.+)$/m) || [])[1] || name).replace(/^["']|["']$/g, '');
+    const m = text.match(/^## Enforcement[ \t]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
+    const body = m ? m[1].trim() : null;
+    const reason = body === null ? 'missing' : !body ? 'empty' : body.startsWith(ENFORCEMENT_PLACEHOLDER) ? 'placeholder' : '';
+    if (reason) rows.push({ path: `${docmapRoot(ctx)}/learnings/${name}`, title, reason });
+  }
+  return rows;
+}
+
 // File a learning (or decision) in docmap for an issue and link it from the Log.
 function fileLearning(ctx, issue, title, { decision = false, description, readWhen, owner } = {}) {
   const script = findDocmap(ctx);
@@ -775,14 +798,14 @@ function fileLearning(ctx, issue, title, { decision = false, description, readWh
   }
   const kind = decision ? 'decisions' : 'learnings';
   const dir = `${docmapRoot(ctx)}/${kind}`;
-  const tags = [issue.fm.id.toLowerCase(), issue.fm.area, ...(issue.fm.tags ?? [])].filter(Boolean);
+  const tags = [...new Set([issue.fm.id.toLowerCase(), issue.fm.area, ...(issue.fm.tags ?? [])].filter(Boolean))];
   const args = ['new', dir, title, '--tags', tags.join(','), '--description', description || title];
   if (readWhen) args.push('--read-when', readWhen);
   const r = runDocmap(ctx, script, args);
   if (r.code !== 0) throw new UserError(`docmap new failed: ${r.err || r.out}`);
   const file = r.out.split('\n')[0];
   appendLog(issue, owner || issue.fm.owner || defaultOwner(), `${decision ? 'decision' : 'learning'}: ${file}`);
-  const fill = decision ? '## Decision, ## Why and ## Consequences' : '## What happened, ## Lesson and ## Apply when';
+  const fill = decision ? '## Decision, ## Why and ## Consequences' : '## What happened, ## Lesson, ## Apply when and ## Enforcement (the check that stops a repeat, or "None: <why>")';
   const readWhenNote = readWhen ? '' : '; set read_when (the situation in which an agent must open it): docmap check fails until it is filled';
   return { file, note: `${file}\nnow write ${fill}${readWhenNote}` };
 }
@@ -1019,18 +1042,25 @@ function cmdRetro(ctx, args) {
     .map((i) => ({ issue: i, signals: frictionSignals(i) }))
     .filter(({ issue, signals }) => signals.length && !hasLearning(issue))
     .sort((a, b) => compareIssues(ctx.cfg)(a.issue, b.issue));
+  const unenforced = learningsWithoutEnforcement(ctx);
   if (args.json) {
-    console.log(JSON.stringify(rows.map(({ issue, signals }) => ({ ...toJson(issue), signals })), null, 2));
+    const issues = rows.map(({ issue, signals }) => ({ ...toJson(issue), signals }));
+    console.log(JSON.stringify(args.learnings ? { issues, learnings: unenforced } : issues, null, 2));
     return 0;
   }
   if (!rows.length) {
     console.log(`retro: nothing to learn from (${closed.length} issues closed in the last ${days} days, none with unrecorded friction)`);
-    return 0;
+  } else {
+    console.log(`retro: ${rows.length} of ${closed.length} issues closed in the last ${days} days show friction and have no learning yet\n`);
+    console.log(table(['id', 'status', 'closed', 'signals', 'title'],
+      rows.map(({ issue, signals }) => [issue.fm.id, issue.fm.status, issue.fm.updated, signals.join(','), issue.fm.title])));
+    console.log(`\nfor each: backlog show <ID> --brief, then backlog learn <ID> "<what we now know>" (or skip if nothing non-obvious was learned)`);
   }
-  console.log(`retro: ${rows.length} of ${closed.length} issues closed in the last ${days} days show friction and have no learning yet\n`);
-  console.log(table(['id', 'status', 'closed', 'signals', 'title'],
-    rows.map(({ issue, signals }) => [issue.fm.id, issue.fm.status, issue.fm.updated, signals.join(','), issue.fm.title])));
-  console.log(`\nfor each: backlog show <ID> --brief, then backlog learn <ID> "<what we now know>" (or skip if nothing non-obvious was learned)`);
+  if (unenforced.length) {
+    console.log(`\nretro: ${unenforced.length} learning(s) not enforced yet (any age)\n`);
+    console.log(table(['enforcement', 'learning'], unenforced.map((l) => [l.reason, l.path])));
+    console.log('\nfor each: turn the Lesson into a check (lint rule, type, test, verify step, API change) and name it under ## Enforcement, or write "None: <why>"');
+  }
   return 0;
 }
 
@@ -1283,7 +1313,7 @@ const COMMANDS = {
   unblock: { usage: 'unblock <ID> [--force]', desc: 'blocked -> in-progress (if owner set) or todo', opts: ['owner'], flags: ['force'], run: cmdUnblock },
   done: { usage: 'done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]', desc: 'close: requires ticked criteria and a non-empty Outcome', opts: ['outcome', 'owner', 'learning', 'decision'], flags: ['force'], run: cmdDone },
   learn: { usage: 'learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]', desc: 'file a docmap learning (or decision) for an issue and link it in the Log', opts: ['description', 'read-when', 'owner'], flags: ['decision'], run: cmdLearn },
-  retro: { usage: 'retro [--days N] [--json]', desc: 'closed issues with friction in the Log (blocked, revert, retry...) and no learning yet', opts: ['days'], flags: ['json'], run: cmdRetro },
+  retro: { usage: 'retro [--days N] [--json [--learnings]]', desc: 'closed issues with friction and no learning yet; learnings with no enforcement check', opts: ['days'], flags: ['json', 'learnings'], run: cmdRetro },
   cancel: { usage: 'cancel <ID> "<reason>"', desc: 'status=cancelled with a logged reason', opts: ['owner'], flags: [], run: cmdCancel },
   next: { usage: 'next [--area a] [--owner o] [--claim] [--branch b] [--json]', desc: 'pick the best todo issue; exit 3 = nothing to do, 4 = owner is blocked', opts: ['area', 'owner', 'branch'], flags: ['claim', 'json'], run: cmdNext },
   tick: { usage: 'tick <ID> <n|all> [n...]', desc: 'mark acceptance criteria as done (1-based)', opts: [], flags: [], run: cmdTick },

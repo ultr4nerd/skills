@@ -21,8 +21,9 @@ Entry point for any agent working in this repo. `CLAUDE.md` points here.
    (or `next --claim`), log as you go, `done` with an Outcome. Small or exploratory tasks do not
    need one. Never push to `main`; one PR per issue.
 3. A rule or a choice between alternatives is a decision in `docs/decisions/`, never a comment.
-   Friction (revert, retry, workaround, wrong assumption) becomes a learning via
-   `backlog done --learning` or `backlog learn`.
+   Friction (revert, retry, workaround, wrong assumption) becomes a check when one can catch it
+   (a test or a `verify` step), and a learning via `backlog done --learning` or `backlog learn`
+   whose `## Enforcement` names that check (decision 0004).
 4. Skills stay runtime-agnostic: files and zero-dependency CLIs only. Nothing in `skills/` may
    assume CI, Vercel or a particular machine (see decision 0001).
 5. Blocked means stop: `backlog block <ID> "<reason>"` and end the turn.

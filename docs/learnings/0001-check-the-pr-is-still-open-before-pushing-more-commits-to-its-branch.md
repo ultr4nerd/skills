@@ -4,7 +4,7 @@ description: A follow-up commit pushed to the branch of an already merged PR nev
 read_when: Adding commits to an issue branch after its PR was opened, especially when resuming work or reopening a closed issue
 id: learnings-0001
 status: current
-updated: 2026-11-11
+updated: 2026-11-18
 tags: [iss-0012, whatsapp, git, pr]
 ---
 
@@ -27,3 +27,9 @@ updated main, and open a new PR. Never edit the description of a merged PR to de
 
 Any follow-up after a PR was opened: review feedback, "also add X", reopening a done issue, or
 resuming work in a later session.
+
+## Enforcement
+
+None yet. Candidate: a pre-push hook that runs `gh pr view --json state` and refuses to push to
+the branch of a merged or closed PR. Not added yet: this repo has no hook setup, and the backlog
+skill cannot ship one because it must not assume `gh` (decision 0001). Until then it is prose.

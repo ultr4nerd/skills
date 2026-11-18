@@ -4,7 +4,7 @@ description: "npx skills add skipped backlog and docmap for months because an un
 read_when: Editing a SKILL.md frontmatter, or changing how verify checks skill packaging
 id: learnings-0003
 status: current
-updated: 2026-11-11
+updated: 2026-11-18
 tags: [iss-0015, repo, packaging, yaml]
 ---
 
@@ -29,3 +29,8 @@ them. Descriptions with punctuation are written as double-quoted strings.
 Writing or editing any SKILL.md description (they are long and full of colons), adding a field to
 the frontmatter, or after changing verify's packaging checks: run `npx skills add . --list` and
 confirm every skill is listed with no SKIPPED line.
+
+## Enforcement
+
+`scripts/verify.mjs` rejects any SKILL.md frontmatter value that is unquoted and contains `': '`
+or `' #'` (ISS-0015), so `npm run verify` goes red before an installer would skip the skill.

@@ -57,14 +57,22 @@ must route ("Before proposing a change to architecture...") rather than describe
 
 A decision records a choice that constrains future work (`## Decision`, `## Why`,
 `## Consequences`); a learning records a surprise worth not repeating (`## What happened`,
-`## Lesson`, `## Apply when`). Both are numbered and immutable: supersede, never rewrite.
+`## Lesson`, `## Apply when`, `## Enforcement`). Both are numbered and immutable: supersede, never
+rewrite.
+
+A learning is prose, and prose only helps if the next agent finds it and obeys it. So each one
+says under `## Enforcement` which deterministic check now stops a repeat (lint rule, type, test,
+verify step, or an API change that makes the mistake impossible), or `None: <why>` when no check
+can catch it. Try the check first; the learning is the record, not the guard.
 
 Memory only works if it is written at the moment of friction and read at the moment of risk.
 docmap gives the storage and the search; the [backlog](../backlog/) skill, when installed next to
 it, closes the loop programmatically: `backlog next --claim` prints the decisions and learnings
 whose frontmatter matches the issue, `backlog done --learning` / `backlog learn` file one tagged
-with the issue id, and `backlog retro` lists closed issues with friction and no learning yet.
-`docmap check` warns when a decision lacks `## Why` or a learning lacks `## Apply when`.
+with the issue id, and `backlog retro` lists closed issues with friction and no learning yet,
+plus learnings whose `## Enforcement` is still open.
+`docmap check` warns when a decision lacks `## Why` or a learning lacks `## Apply when` or
+`## Enforcement` (or leaves it empty or as the template text).
 
 ## Config
 
@@ -124,7 +132,9 @@ Errors (exit 1):
 
 Warnings (exit 0): `status: draft` older than 30 days (by `updated`, else mtime); docs over 400 lines;
 a doc under a `decisions/` directory without `## Decision` or `## Why`; a doc under `learnings/`
-without `## Lesson` or `## Apply when` (a learning without a trigger is never recovered).
+without `## Lesson`, `## Apply when` or `## Enforcement` (a learning without a trigger is never
+recovered; one without enforcement stays prose); a learning whose `## Enforcement` is empty or
+still starts with the template text.
 
 ## INDEX.md format
 

@@ -442,7 +442,7 @@ describe('docmap bridge', () => {
     withDocs();
     ok(['new', 'Login endpoint', '--area', 'core', '--tags', 'auth', '--criteria', 'x']);
     const l = ok(['learn', '1', 'Ingress strips Set-Cookie without Secure', '--read-when', 'Setting cookies behind the ingress']);
-    assert.match(l.out, /^docs\/learnings\/0002-ingress-strips-set-cookie-without-secure\.md\nnow write ## What happened, ## Lesson and ## Apply when\n$/);
+    assert.match(l.out, /^docs\/learnings\/0002-ingress-strips-set-cookie-without-secure\.md\nnow write ## What happened, ## Lesson, ## Apply when and ## Enforcement \(the check that stops a repeat, or "None: <why>"\)\n$/);
     const file = fs.readFileSync(path.join(root, 'docs/learnings/0002-ingress-strips-set-cookie-without-secure.md'), 'utf8');
     assert.match(file, /^tags: \[iss-0001, core, auth\]$/m);
     assert.match(file, /^read_when: Setting cookies behind the ingress$/m);
@@ -492,6 +492,24 @@ describe('docmap bridge', () => {
     assert.match(ok(['retro']).out, /^retro: 1 of 3 issues/);
     assert.match(ok(['retro', '--days', '0'], { now: '2026-11-01T10:00:00' }).out, /nothing to learn from \(0 issues closed in the last 0 days/);
     fails(['retro', '--days', 'x'], 2);
+
+    // Learnings whose ## Enforcement is missing, empty or still the template text, any age.
+    const un = ok(['retro']).out;
+    assert.match(un, /retro: 2 learning\(s\) not enforced yet \(any age\)/);
+    assert.match(un, /placeholder\s+docs\/learnings\/0001-session-cookies/);
+    assert.match(un, /placeholder\s+docs\/learnings\/0002-flag-x-is-required/);
+    const l1 = path.join(root, 'docs/learnings/0001-session-cookies-need-samesite-none-behind-the-proxy.md');
+    fs.writeFileSync(l1, fs.readFileSync(l1, 'utf8').replace(/## Enforcement[\s\S]*$/, '## Enforcement\n\nNone: only a browser shows it.\n'));
+    const l2 = path.join(root, 'docs/learnings/0002-flag-x-is-required.md');
+    fs.writeFileSync(l2, fs.readFileSync(l2, 'utf8').replace(/\n## Enforcement[\s\S]*$/, '\n'));
+    const after = ok(['retro', '--days', '0'], { now: '2026-11-01T10:00:00' }).out;
+    assert.match(after, /nothing to learn from[\s\S]*retro: 1 learning\(s\) not enforced yet/, 'shown even when no issue has friction');
+    assert.match(after, /missing\s+docs\/learnings\/0002-flag-x-is-required/);
+    assert.doesNotMatch(after, /0001-session-cookies/, '"None: <why>" counts as answered');
+    assert.ok(Array.isArray(JSON.parse(ok(['retro', '--json']).out)), 'plain --json keeps its array shape');
+    const jl = JSON.parse(ok(['retro', '--json', '--learnings']).out);
+    assert.deepEqual(jl.learnings.map((x) => [x.path, x.reason]), [['docs/learnings/0002-flag-x-is-required.md', 'missing']]);
+    assert.equal(jl.issues.length, 1);
     assert.match(ok(['--version']).out, /^backlog \d+\.\d+\.\d+\n$/);
   });
 });
