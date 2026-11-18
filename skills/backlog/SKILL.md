@@ -20,9 +20,10 @@ Epics (`kind: epic`) group children via `parent:` and are never picked by `next`
 ## Hard rules
 
 - One in-progress issue per owner. Finish, block or cancel before starting another.
-- Nothing is done until the project verify (printed by `next`/`start`/`done`) is green and
-  `## Outcome` says what shipped and how it was verified. `done` refuses unchecked criteria and
-  an empty Outcome. `--force` exists for humans, not for loops.
+- Nothing is done until the project verify is green and `## Outcome` says what shipped and how
+  it was verified. `done` refuses unchecked criteria, an empty Outcome and, when `backlog.json`
+  sets `verify`, a red verify run (it runs it for you). `--force` and `--no-verify` exist for
+  humans, not for loops; both are logged.
 - Never edit frontmatter by hand when a command exists (`set`, `start`, `block`, `done`, `log`,
   `tick`). Editing the body (Context, Scope, Notes, ticking criteria) by hand is fine.
 - Log as you go (`backlog log`), not at the end. The Log is how a human audits the run, and how
@@ -111,7 +112,7 @@ backlog list [--status s,s] [--area a] [--owner o] [--all] [--json]     backlog 
 backlog next [--owner o] [--claim] [--json]      # exit 3 = empty, 4 = owner is blocked
 backlog start <ID> --owner <me> | log <ID> "<msg>" | tick <ID> <n|all> | set <ID> key=value
 backlog block <ID> "<reason>" [--learning t] | unblock <ID> | cancel <ID> "<reason>"
-backlog done <ID> [--outcome ".."] [--learning t] [--decision t] [--force]
+backlog done <ID> [--outcome ".."] [--learning t] [--decision t] [--no-verify] [--force]
 backlog learn <ID> "<title>" [--decision] [--read-when ".."]  | retro [--days N] [--json]
 backlog board | stale | index | check [--fix] | help | --version
 ```

@@ -93,6 +93,8 @@ function loadConfig(root) {
     throw new UserError(`backlog.json: invalid JSON (${e.message})`);
   }
   const cfg = { ...DEFAULT_CONFIG, ...parsed };
+  // done runs verify only when the project chose the command; the built-in default is a hint.
+  cfg.verifyExplicit = typeof parsed.verify === 'string' && parsed.verify.trim() !== '';
   for (const key of ['statuses', 'priorities', 'kinds', 'areas']) {
     if (!Array.isArray(cfg[key])) throw new UserError(`backlog.json: "${key}" must be an array`);
   }
@@ -757,6 +759,7 @@ const FRICTION = {
   workaround: /\bwork[- ]?around\b/i,
   flaky: /\bflaky\b/i,
   forced: /done --force|--force\b/,
+  'verify skipped': /: done --no-verify: verify skipped/,
   cancelled: /: cancelled: /,
 };
 
@@ -1002,8 +1005,21 @@ function cmdDone(ctx, args) {
   }
   const outcome = resolveOutcome(ctx, issue, args);
   const owner = args.owner || issue.fm.owner || defaultOwner();
+  const skipVerify = args.force ? '--force' : args['no-verify'] ? '--no-verify' : '';
+  let verified = '';
+  if (ctx.cfg.verifyExplicit && !skipVerify) {
+    console.log(`verify: ${ctx.cfg.verify}`);
+    const res = spawnSync(ctx.cfg.verify, { cwd: ctx.root, shell: true, stdio: ['ignore', 'inherit', 'inherit'] });
+    const code = res.error ? res.error.message : res.signal ? res.signal : res.status;
+    if (res.status !== 0) {
+      throw new UserError(`${issue.fm.id}: verify failed ("${ctx.cfg.verify}" exit ${code}); fix it, then run done again (or --no-verify, which is logged)`);
+    }
+    verified = ctx.cfg.verify;
+  }
   issue.body = setSection(issue.body, 'Outcome', outcome);
   if (unchecked.length) appendLog(issue, owner, `done --force with ${unchecked.length} unchecked acceptance criteria`);
+  if (verified) appendLog(issue, owner, `verify passed: ${verified}`);
+  else if (ctx.cfg.verifyExplicit) appendLog(issue, owner, `done ${skipVerify}: verify skipped (${ctx.cfg.verify})`);
   const firstLine = outcome.split('\n')[0].trim();
   appendLog(issue, owner, `done: ${firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine}`);
   applyChanges(ctx, store, issue, [{ key: 'status', op: '=', value: 'done' }, { key: 'owner', op: '=', value: '' }], { force: true });
@@ -1019,7 +1035,7 @@ function cmdDone(ctx, args) {
   if (signals.length && !hasLearning(issue) && findDocmap(ctx)) {
     console.log(`hint: Log shows ${signals.join(', ')}; if something non-obvious caused it, record it: backlog learn ${issue.fm.id} "<title>"`);
   }
-  if (ctx.cfg.verify) console.log(`next: run "${ctx.cfg.verify}", then commit with ${issue.fm.id} in the message`);
+  if (ctx.cfg.verify && !verified) console.log(`next: run "${ctx.cfg.verify}", then commit with ${issue.fm.id} in the message`);
   else console.log(`next: commit with ${issue.fm.id} in the message`);
 }
 
@@ -1311,7 +1327,7 @@ const COMMANDS = {
   log: { usage: 'log <ID> "<message>" [--owner name]', desc: 'append a timestamped line to ## Log', opts: ['owner'], flags: [], run: cmdLog },
   block: { usage: 'block <ID> "<reason>" [--owner name] [--learning "<title>"]', desc: 'status=blocked and log the reason', opts: ['owner', 'learning'], flags: [], run: cmdBlock },
   unblock: { usage: 'unblock <ID> [--force]', desc: 'blocked -> in-progress (if owner set) or todo', opts: ['owner'], flags: ['force'], run: cmdUnblock },
-  done: { usage: 'done <ID> [--outcome "..."] [--force] [--learning "<title>"] [--decision "<title>"]', desc: 'close: requires ticked criteria and a non-empty Outcome', opts: ['outcome', 'owner', 'learning', 'decision'], flags: ['force'], run: cmdDone },
+  done: { usage: 'done <ID> [--outcome "..."] [--no-verify] [--force] [--learning "<title>"] [--decision "<title>"]', desc: 'close: requires ticked criteria, a non-empty Outcome and, when backlog.json sets verify, a green verify run', opts: ['outcome', 'owner', 'learning', 'decision'], flags: ['force', 'no-verify'], run: cmdDone },
   learn: { usage: 'learn <ID> "<title>" [--decision] [--description "..."] [--read-when "..."]', desc: 'file a docmap learning (or decision) for an issue and link it in the Log', opts: ['description', 'read-when', 'owner'], flags: ['decision'], run: cmdLearn },
   retro: { usage: 'retro [--days N] [--json [--learnings]]', desc: 'closed issues with friction and no learning yet; learnings with no enforcement check', opts: ['days'], flags: ['json', 'learnings'], run: cmdRetro },
   cancel: { usage: 'cancel <ID> "<reason>"', desc: 'status=cancelled with a logged reason', opts: ['owner'], flags: [], run: cmdCancel },
