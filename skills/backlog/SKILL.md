@@ -72,7 +72,9 @@ name (for example `claude`); `BACKLOG_OWNER=<me>` makes it the default.
    block taught you something non-obvious, add `--learning "<title>"`.
 6. Tick criteria as each is proven (`backlog tick <ID> 1`). Fill `## Summary` in
    `progress/<ID>.md`, then `backlog done <ID>` (or `--outcome "..."`). If the task involved a
-   revert, retry, workaround or a wrong assumption, add `--learning "<what we now know>"`; if you
+   revert, retry, workaround or a wrong assumption, first try to make it impossible to repeat
+   with a check (lint rule, type, test, verify step, API change) inside this issue, then add
+   `--learning "<what we now know>"` and name that check under its `## Enforcement`; if you
    chose between real alternatives, `--decision "<what was chosen>"`. `done` prints a hint when
    the Log shows friction and no learning is linked.
 7. Commit with the issue id in the message (`git commit -m "ISS-0012: add login endpoint"`).
@@ -85,10 +87,13 @@ name (for example `claude`); `BACKLOG_OWNER=<me>` makes it the default.
 
 - `backlog learn <ID> "<title>" [--decision] [--read-when "..."]` files a numbered doc tagged with
   the issue id and links it in the Log. Then write its sections and its `read_when`: the
-  situation in which an agent must open it. `docmap check` fails until `read_when` is set.
+  situation in which an agent must open it. `docmap check` fails until `read_when` is set and
+  warns until `## Enforcement` names the check that stops a repeat (or says `None: <why>`).
 - `backlog retro [--days 14]` lists closed issues whose Log shows friction (blocked, revert,
   retry, workaround, `--force`, cancelled) and that have no learning yet. Run it when asked for
-  a retro or weekly; for each row, `show <ID> --brief`, then `learn` or consciously skip.
+  a retro or weekly; for each row, `show <ID> --brief`, then `learn` or consciously skip. It also
+  lists learnings of any age whose `## Enforcement` is missing, empty or the template text: turn
+  each into a check (its own issue if it is big) or write `None: <why>`.
 
 ## Reporting and human review
 
