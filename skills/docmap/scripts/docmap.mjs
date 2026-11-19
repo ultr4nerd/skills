@@ -1053,6 +1053,15 @@ define('check', {
 
 // ---- new ------------------------------------------------------------------
 
+// Where init points templatesDir: this script's own templates, relative to the project, when the
+// skill is installed inside it (.claude/skills, .agents/skills, ...); else the default.
+function initTemplatesDir(root) {
+  const own = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates');
+  const rel = path.relative(root, own);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !fs.existsSync(own)) return DEFAULT_CONFIG.templatesDir;
+  return toPosix(rel);
+}
+
 function templatesDir(ctx) {
   const configured = path.resolve(ctx.root, ctx.config.templatesDir);
   if (fs.existsSync(configured)) return configured;
@@ -1184,7 +1193,7 @@ define('init', {
     let config = ctx.config;
     if (!fs.existsSync(configFile)) {
       const root = (opts.root || 'docs').replace(/\/+$/, '');
-      config = { ...DEFAULT_CONFIG, roots: [root], numbered: [`${root}/decisions`, `${root}/learnings`] };
+      config = { ...DEFAULT_CONFIG, roots: [root], numbered: [`${root}/decisions`, `${root}/learnings`], templatesDir: initTemplatesDir(ctx.root) };
       fs.writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
       io.out(`created ${CONFIG_FILE}`);
       ctx = createContext(ctx.cwd);

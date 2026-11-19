@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { run, parseFrontmatter, slugify, globToRegExp } from '../skills/docmap/scripts/docmap.mjs';
 
 // ---------------------------------------------------------------------------
@@ -464,6 +466,23 @@ test('init scaffolds config, routing READMEs and indexes, and never overwrites',
   assert.equal(cli(custom, 'init', '--root', 'documentation').code, 0);
   assert.deepEqual(JSON.parse(read(custom, 'docmap.json')).numbered, ['documentation/decisions', 'documentation/learnings']);
   assert.equal(cli(custom, 'check').code, 0);
+});
+
+test('init points templatesDir at the installed copy, wherever the installer put it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docmap-init-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  const skillDir = path.join(dir, '.agents', 'skills', 'docmap');
+  fs.cpSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'docmap'), skillDir, { recursive: true });
+  const r = spawnSync(process.execPath, [path.join(skillDir, 'scripts', 'docmap.mjs'), 'init'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(read(dir, 'docmap.json')).templatesDir, '.agents/skills/docmap/templates');
+  const before = read(dir, 'docmap.json');
+  assert.equal(spawnSync(process.execPath, [path.join(skillDir, 'scripts', 'docmap.mjs'), 'init'], { cwd: dir, encoding: 'utf8' }).status, 0);
+  assert.equal(read(dir, 'docmap.json'), before);
+  // A script outside the project keeps the default (the runtime fallback still finds its templates).
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'docmap-init-'));
+  assert.equal(cli(outside, 'init').code, 0);
+  assert.equal(JSON.parse(read(outside, 'docmap.json')).templatesDir, '.claude/skills/docmap/templates');
 });
 
 // ---------------------------------------------------------------------------
